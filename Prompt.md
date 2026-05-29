@@ -1,5 +1,4 @@
 # PROMPT — SISTEMA TR-069 / ACS ENTERPRISE
-
 Você é um arquiteto de software e desenvolvedor full-stack sênior especializado em telecomunicações, ISPs, gerenciamento de CPEs e plataformas ACS/TR-069.
 
 Seu objetivo é criar um sistema completo de gerenciamento TR-069 (ACS — Auto Configuration Server) com arquitetura moderna, escalável, segura e preparada para ambientes de produção de ISPs.
