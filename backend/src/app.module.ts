@@ -27,7 +27,7 @@ import { QueueModule } from './queue/queue.module';
     ClientsModule,
     LogsModule,
     AlertsModule,
-    // WebsocketModule, // TODO: fix WebSocket integration with Fastify
+    WebsocketModule,
     QueueModule,
   ],
   providers: [PrismaService],
