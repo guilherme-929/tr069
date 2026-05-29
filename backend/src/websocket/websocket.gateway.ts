@@ -7,6 +7,7 @@ import {
 import { Server, WebSocket } from 'ws';
 
 @WSGateway({
+  path: '/ws',
   transports: ['websocket'],
 })
 export class WebsocketGateway
