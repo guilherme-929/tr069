@@ -1,36 +1,29 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 import { Wifi, WifiOff, Cpu, HardDrive, Activity, AlertTriangle } from 'lucide-react';
 import {
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 
 const COLORS = ['#22c55e', '#ef4444', '#f59e0b', '#4e9fff'];
 
-const mockTimeline = Array.from({ length: 24 }, (_, i) => ({
-  hour: `${i}h`,
-  online: Math.floor(Math.random() * 200) + 300,
-  provisioned: Math.floor(Math.random() * 50),
-}));
-
-const mockModels = [
-  { name: 'ZTE F660v8', value: 35 },
-  { name: 'Huawei HG8245H', value: 28 },
-  { name: 'Nokia G-240W-B', value: 18 },
-  { name: 'Others', value: 19 },
-];
-
 export default function Dashboard() {
   const [stats, setStats] = useState({
-    online: 4821, offline: 124, totalDevices: 4945,
-    totalModels: 56, totalFirmwares: 18, provisionedToday: 234,
+    online: 0, offline: 0, totalDevices: 0,
+    totalModels: 0, totalFirmwares: 0, provisionedToday: 0,
     alerts: [],
   });
+  const [recentDevices, setRecentDevices] = useState<any[]>([]);
+  const [models, setModels] = useState<any[]>([]);
 
   useEffect(() => {
     api.get('/acs/stats').then(({ data }) => setStats(data)).catch(() => {});
+    api.get('/devices', { params: { limit: 5 } }).then(({ data }) => setRecentDevices(data.data || [])).catch(() => {});
+    api.get('/models').then(({ data }) => {
+      const items = data.data || data || [];
+      setModels(items.slice(0, 8));
+    }).catch(() => {});
   }, []);
 
   const cards = [
@@ -77,22 +70,8 @@ export default function Dashboard() {
               <p className="text-xs text-slate-500">Last 24 hours</p>
             </div>
           </div>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={mockTimeline}>
-                <defs>
-                  <linearGradient id="colorOnline" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <Tooltip />
-                <Area type="monotone" dataKey="online" stroke="#22c55e" fillOpacity={1} fill="url(#colorOnline)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-[300px] flex items-center justify-center">
+            <p className="text-sm text-slate-400">Timeline data will appear here once devices start reporting</p>
           </div>
         </div>
 
@@ -100,24 +79,27 @@ export default function Dashboard() {
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Active Alerts</h3>
             <span className="bg-danger/10 text-danger text-[10px] font-bold px-2 py-0.5 rounded-full">
-              {stats.alerts.length || 3} CRITICAL
+              {stats.alerts?.length || 0} CRITICAL
             </span>
           </div>
           <div className="space-y-4 flex-1">
-            {[
-              { icon: AlertTriangle, color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger', title: 'Provisioning Failure', desc: 'Device SN: AC-4921-FF', time: '2 mins ago' },
-              { icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning', title: 'CWMP Auth Error', desc: 'Unrecognized MAC: 00:25:96...', time: '14 mins ago' },
-              { icon: WifiOff, color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger', title: 'Node Down', desc: 'Subnet 192.168.4.x unreachable', time: '45 mins ago' },
-            ].map((alert, i) => (
-              <div key={i} className={`flex gap-4 p-3 rounded-lg ${alert.bg} border-l-4 ${alert.border}`}>
-                <alert.icon size={18} className={alert.color} />
+            {(stats.alerts?.length ? stats.alerts : []).map((alert: any, i: number) => (
+              <div key={i} className="flex gap-4 p-3 rounded-lg bg-danger/10 border-l-4 border-danger">
+                <AlertTriangle size={18} className="text-danger" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white">{alert.title}</p>
-                  <p className="text-xs text-slate-500">{alert.desc}</p>
-                  <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">{alert.time}</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">{alert.title || alert.message || 'Alert'}</p>
+                  <p className="text-xs text-slate-500">{alert.description || alert.detail || ''}</p>
+                  <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">
+                    {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : ''}
+                  </p>
                 </div>
               </div>
             ))}
+            {(!stats.alerts || stats.alerts.length === 0) && (
+              <div className="flex items-center justify-center h-full py-8">
+                <p className="text-sm text-slate-400">No active alerts</p>
+              </div>
+            )}
           </div>
           <button className="mt-4 w-full py-2 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors uppercase rounded-lg">
             View All Alerts
@@ -128,26 +110,19 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Provisioning per Hour</h3>
-          <div className="h-[250px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mockTimeline}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="hour" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                <Tooltip />
-                <Bar dataKey="provisioned" fill="#4e9fff" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-[250px] flex items-center justify-center">
+            <p className="text-sm text-slate-400">Provisioning data will appear once devices are provisioned</p>
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Models Distribution</h3>
           <div className="h-[250px] flex items-center justify-center">
+            {models.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={mockModels}
+                  data={models.map((m: any) => ({ name: m.name, value: m._count?.devices || 1 }))}
                   cx="50%"
                   cy="50%"
                   innerRadius={60}
@@ -156,13 +131,16 @@ export default function Dashboard() {
                   dataKey="value"
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 >
-                  {mockModels.map((_, i) => (
+                  {models.map((_: any, i: number) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
+            ) : (
+              <p className="text-sm text-slate-400">No models data</p>
+            )}
           </div>
         </div>
       </div>
@@ -184,27 +162,28 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {[
-                { status: 'Online', model: 'ZTE-F660v8', serial: 'ZTEGC0A1B2C3', ip: '10.24.8.112', time: '2 min ago', fw: 'v7.2.1' },
-                { status: 'Online', model: 'Huawei-HG8245H', serial: 'HWTC98765432', ip: '10.24.9.45', time: '8 min ago', fw: 'v105.R018' },
-                { status: 'Offline', model: 'Nokia-G-240W-B', serial: 'ALCL1234ABCD', ip: '10.24.4.19', time: '14 hours ago', fw: 'v3.5.0' },
-              ].map((row, i) => (
-                <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+              {(recentDevices.length ? recentDevices : []).map((row: any, i: number) => (
+                <tr key={row.id || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${
-                      row.status === 'Online' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
+                      row.status === 'ONLINE' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
                     }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'Online' ? 'bg-success' : 'bg-danger'}`}></span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${row.status === 'ONLINE' ? 'bg-success' : 'bg-danger'}`}></span>
                       {row.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">{row.model}</td>
+                  <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">{row.modelName || row.model?.name || '-'}</td>
                   <td className="px-6 py-4 text-sm font-mono text-slate-500">{row.serial}</td>
-                  <td className="px-6 py-4 text-sm text-slate-500">{row.ip}</td>
-                  <td className="px-6 py-4 text-sm text-slate-400">{row.time}</td>
-                  <td className="px-6 py-4 text-sm font-mono text-slate-500">{row.fw}</td>
+                  <td className="px-6 py-4 text-sm text-slate-500">{row.ipAddress || row.wanIp || '-'}</td>
+                  <td className="px-6 py-4 text-sm text-slate-400">
+                    {row.lastInform ? new Date(row.lastInform).toLocaleString() : '-'}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-mono text-slate-500">{row.firmwareVersion || '-'}</td>
                 </tr>
               ))}
+              {recentDevices.length === 0 && (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-sm text-slate-400">No devices registered</td></tr>
+              )}
             </tbody>
           </table>
         </div>
