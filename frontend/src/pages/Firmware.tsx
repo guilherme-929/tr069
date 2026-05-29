@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Upload, FolderZip, HardDrive } from 'lucide-react';
+import { Upload, FolderArchive, HardDrive } from 'lucide-react';
 
 export default function Firmware() {
   const [firmwares, setFirmwares] = useState<any[]>([]);
@@ -25,7 +25,7 @@ export default function Firmware() {
       <div className="flex gap-4 border-b border-slate-200 dark:border-slate-800">
         {[
           { id: 'firmware', label: 'Firmware', icon: HardDrive },
-          { id: 'models', label: 'Models', icon: FolderZip },
+          { id: 'models', label: 'Models', icon: FolderArchive },
         ].map((t) => (
           <button
             key={t.id}
@@ -44,7 +44,7 @@ export default function Firmware() {
           <div key={fw.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 hover:border-primary transition-colors cursor-pointer group">
             <div className="flex justify-between items-start mb-4">
               <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg group-hover:bg-primary group-hover:text-white transition-colors">
-                <FolderZip size={20} />
+                <FolderArchive size={20} />
               </div>
               <span className={`px-2 py-1 text-[10px] font-black rounded ${
                 fw.status === 'LATEST' ? 'bg-success/10 text-success' :
