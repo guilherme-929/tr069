@@ -20,10 +20,10 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.REMOTE_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Ajustar permissões da pasta no servidor remoto
+      - name: Garantir que o diretório existe no servidor remoto
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST }} << 'EOF'
-            chmod 777 /root/tr069
+            mkdir -p /root/tr069
           EOF
 
       - name: Copiar arquivos para o servidor remoto
@@ -34,7 +34,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST }} << 'EOF'
             cd /root/tr069 || exit 1
-            docker-compose up -d
-            docker-compose exec backend npx prisma db push                                                     │
-            docker-compose exec backend npx prisma db seed            
+            docker compose up -d
+            docker compose exec -T backend npx prisma db push
+            docker compose exec -T backend npx prisma db seed
           EOF
