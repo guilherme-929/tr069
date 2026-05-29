@@ -22,6 +22,8 @@ export class AcsService implements OnModuleInit {
     const port = parseInt(process.env.ACS_PORT || '7547', 10);
 
     this.server = http.createServer((req, res) => {
+      if (!this.validateAuth(req, res)) return;
+
       if (req.method === 'POST' && req.url === '/cwmp') {
         this.handleCwmpRequest(req, res);
       } else if (req.method === 'GET' && req.url === '/cwmp') {
@@ -97,6 +99,43 @@ export class AcsService implements OnModuleInit {
     } catch {
       return '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><cwmp:InformResponse><MaxEnvelopes>1</MaxEnvelopes></cwmp:InformResponse></soap:Body></soap:Envelope>';
     }
+  }
+
+  private validateAuth(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): boolean {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
+      res.end('Unauthorized');
+      return false;
+    }
+
+    const base64 = authHeader.slice(6);
+    const decoded = Buffer.from(base64, 'base64').toString('utf-8');
+    const colonIndex = decoded.indexOf(':');
+    if (colonIndex === -1) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
+      res.end('Unauthorized');
+      return false;
+    }
+
+    const username = decoded.slice(0, colonIndex);
+    const password = decoded.slice(colonIndex + 1);
+    const expectedUser =
+      process.env.ACS_AUTH_USERNAME || 'alemnet';
+    const expectedPass =
+      process.env.ACS_AUTH_PASSWORD || 'alemnet';
+
+    if (username !== expectedUser || password !== expectedPass) {
+      this.logger.warn(`CWMP auth failed for user: ${username}`);
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
+      res.end('Unauthorized');
+      return false;
+    }
+
+    return true;
   }
 
   async getDashboardStats(tenantId: string) {
