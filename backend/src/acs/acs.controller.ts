@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, UseGuards, Res } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AcsService } from './acs.service';
 import { CwmpService } from './cwmp.service';
@@ -19,8 +19,9 @@ export class AcsController {
 
   @Public()
   @Post('cwmp')
-  async handleCwmp(@Body() body: any) {
-    return { status: 'CWMP endpoint active' };
+  async handleCwmp(@Body() body: string, @Res() res: any) {
+    const xmlResponse = await this.cwmpService.handleCwmp(body || '');
+    res.type('text/xml').send(xmlResponse);
   }
 
   @ApiBearerAuth()

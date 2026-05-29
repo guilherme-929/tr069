@@ -51,18 +51,8 @@ export class AcsService implements OnModuleInit {
         const xml = body;
         this.logger.debug(`CWMP Request: ${xml.substring(0, 200)}...`);
 
-        const soapAction = req.headers['soapaction'] || '';
-        let response: any;
+        const xmlResponse = await this.cwmp.handleCwmp(xml);
 
-        if (soapAction.includes('Inform')) {
-          response = await this.cwmp.handleInform(xml);
-        } else if (soapAction.includes('GetRPCMethods')) {
-          response = await this.cwmp.handleGetRPCMethods();
-        } else {
-          response = { status: 'OK' };
-        }
-
-        const xmlResponse = this.convertToXml(response);
         res.writeHead(200, {
           'Content-Type': 'text/xml; charset=utf-8',
           'SOAPServer': 'TR-069 ACS/1.0',

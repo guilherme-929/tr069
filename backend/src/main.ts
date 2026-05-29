@@ -8,9 +8,19 @@ import { PrismaService } from './common/prisma.service';
 import helmet from 'helmet';
 
 async function bootstrap() {
+  const fastifyAdapter = new FastifyAdapter({ bodyLimit: 10 * 1024 * 1024 });
+
+  fastifyAdapter.getInstance().addContentTypeParser(
+    ['text/xml', 'application/xml', 'application/soap+xml'],
+    { parseAs: 'string' },
+    function (req, body, done) {
+      done(null, body);
+    }
+  );
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ bodyLimit: 10 * 1024 * 1024 }),
+    fastifyAdapter,
   );
 
   app.enableCors({

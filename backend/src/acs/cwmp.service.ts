@@ -12,10 +12,49 @@ export class CwmpService {
     textNodeName: '#text',
   });
 
+  private readonly builder = new XMLBuilder({
+    ignoreAttributes: false,
+    attributeNamePrefix: '@_',
+    format: true,
+  });
+
   constructor(
     private prisma: PrismaService,
     private ws: WebsocketGateway,
   ) {}
+
+  async handleCwmp(xmlString: string) {
+    if (!xmlString) {
+      return this.builder.build(this.buildSoapResponse('Fault', { faultcode: 'Client', faultstring: 'Empty body' }));
+    }
+
+    try {
+      const parsed = this.parser.parse(xmlString);
+      const envelope = parsed['soap:Envelope'] || parsed['soapenv:Envelope'] || parsed['Envelope'];
+      const body = envelope?.['soap:Body'] || envelope?.['soapenv:Body'] || envelope?.['Body'];
+
+      if (!body) {
+        return this.builder.build(this.buildSoapResponse('Fault', { faultcode: 'Client', faultstring: 'No SOAP body' }));
+      }
+
+      let responseObj: any;
+
+      if (body['cwmp:Inform'] || body['Inform']) {
+        responseObj = await this.handleInform(body);
+      } else if (body['cwmp:GetRPCMethods'] || body['GetRPCMethods']) {
+        responseObj = await this.handleGetRPCMethods();
+      } else {
+        // We only handle Inform and GetRPCMethods from the CPE initiating a session
+        responseObj = this.buildInformResponse(null);
+      }
+
+      const xmlResponse = this.builder.build(responseObj);
+      return `<?xml version="1.0" encoding="UTF-8"?>\n${xmlResponse}`;
+    } catch (error) {
+      this.logger.error('Error handling CWMP:', error);
+      return this.builder.build(this.buildSoapResponse('Fault', { faultcode: 'Server', faultstring: 'Internal error' }));
+    }
+  }
 
   async handleInform(data: any) {
     const inform = data?.['cwmp:Inform'] || data?.Inform;
