@@ -1,4 +1,4 @@
-import { PrismaClient, Role, FirmwareStatus } from '@prisma/client';
+import { PrismaClient, Role, FirmwareStatus, DeviceStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -56,14 +56,14 @@ async function main() {
   });
 
   const models = [
-    { manufacturer: 'ZTE', name: 'F660v8', hwVersion: 'v1.2.0', dataModel: 'TR-181', defaultParameters: { Device.ManagementServer.URL: 'http://acs.local:7547/cwmp', Device.ManagementServer.PeriodicInformInterval: '300' } },
-    { manufacturer: 'ZTE', name: 'F680v7', hwVersion: 'v2.0.1', dataModel: 'TR-181', defaultParameters: { Device.ManagementServer.URL: 'http://acs.local:7547/cwmp', Device.ManagementServer.PeriodicInformInterval: '300' } },
-    { manufacturer: 'Huawei', name: 'HG8245H', hwVersion: 'v4.0', dataModel: 'TR-098', defaultParameters: { InternetGatewayDevice.ManagementServer.URL: 'http://acs.local:7547/cwmp', InternetGatewayDevice.ManagementServer.PeriodicInformInterval: '300' } },
-    { manufacturer: 'Huawei', name: 'HG8245W5', hwVersion: 'v5.0', dataModel: 'TR-181', defaultParameters: { Device.ManagementServer.URL: 'http://acs.local:7547/cwmp', Device.ManagementServer.PeriodicInformInterval: '300' } },
-    { manufacturer: 'Nokia', name: 'G-240W-B', hwVersion: 'v3.1', dataModel: 'TR-181', defaultParameters: { Device.ManagementServer.URL: 'http://acs.local:7547/cwmp', Device.ManagementServer.PeriodicInformInterval: '300' } },
-    { manufacturer: 'Intelbras', name: 'RG1200', hwVersion: 'v1.0', dataModel: 'TR-181', defaultParameters: { Device.ManagementServer.URL: 'http://acs.local:7547/cwmp', Device.ManagementServer.PeriodicInformInterval: '300' } },
-    { manufacturer: 'TP-Link', name: 'Archer AX55', hwVersion: 'v1.2.0', dataModel: 'TR-181', defaultParameters: { Device.ManagementServer.URL: 'http://acs.local:7547/cwmp', Device.ManagementServer.PeriodicInformInterval: '300' } },
-    { manufacturer: 'FiberHome', name: 'HG6245D', hwVersion: 'v2.1', dataModel: 'TR-181', defaultParameters: { Device.ManagementServer.URL: 'http://acs.local:7547/cwmp', Device.ManagementServer.PeriodicInformInterval: '300' } },
+    { manufacturer: 'ZTE', name: 'F660v8', hwVersion: 'v1.2.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'ZTE', name: 'F680v7', hwVersion: 'v2.0.1', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'Huawei', name: 'HG8245H', hwVersion: 'v4.0', dataModel: 'TR-098', defaultParameters: { 'InternetGatewayDevice.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'Huawei', name: 'HG8245W5', hwVersion: 'v5.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'Nokia', name: 'G-240W-B', hwVersion: 'v3.1', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'Intelbras', name: 'RG1200', hwVersion: 'v1.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'TP-Link', name: 'Archer AX55', hwVersion: 'v1.2.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'FiberHome', name: 'HG6245D', hwVersion: 'v2.1', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
   ];
 
   const createdModels = [];
@@ -105,14 +105,14 @@ async function main() {
   }
 
   const devices = [
-    { serial: 'ZTEGC0A1B2C3', mac: '00:1A:2B:3C:4D:5E', modelName: 'F660v8', status: 'ONLINE', ipAddress: '10.24.8.112', firmwareVersion: 'v7.2.1', lastInform: new Date(), lastContact: new Date(Date.now() - 120000), modelId: createdModels[0].id, clientId: createdClients[0].id },
-    { serial: 'ZTEGC0A1B2C4', mac: '00:1A:2B:3C:4D:5F', modelName: 'F680v7', status: 'ONLINE', ipAddress: '10.24.8.113', firmwareVersion: 'v6.1.0', lastInform: new Date(), lastContact: new Date(Date.now() - 300000), modelId: createdModels[1].id, clientId: createdClients[1].id },
-    { serial: 'HWTC98765432', mac: 'E4:5F:01:99:A2:BC', modelName: 'HG8245H', status: 'ONLINE', ipAddress: '10.24.9.45', firmwareVersion: 'v105.R018', lastInform: new Date(), lastContact: new Date(Date.now() - 480000), modelId: createdModels[2].id, clientId: createdClients[2].id },
-    { serial: 'HWTC98765433', mac: 'E4:5F:01:99:A2:BD', modelName: 'HG8245W5', status: 'OFFLINE', ipAddress: '10.24.9.46', firmwareVersion: 'v2.0.1', lastInform: new Date(), lastContact: new Date(Date.now() - 86400000), modelId: createdModels[3].id, clientId: createdClients[3].id },
-    { serial: 'ALCL1234ABCD', mac: '88:A9:C2:B4:77:F1', modelName: 'G-240W-B', status: 'OFFLINE', ipAddress: '10.24.4.19', firmwareVersion: 'v3.5.0', lastInform: new Date(), lastContact: new Date(Date.now() - 50400000), modelId: createdModels[4].id, clientId: createdClients[4].id },
-    { serial: 'INTB00112233', mac: 'BC:A9:C2:B4:77:00', modelName: 'RG1200', status: 'ONLINE', ipAddress: '10.24.10.5', firmwareVersion: 'v1.0.4', lastInform: new Date(), lastContact: new Date(Date.now() - 60000), modelId: createdModels[5].id, clientId: createdClients[0].id },
-    { serial: 'TPLK55443322', mac: 'AA:BB:CC:DD:EE:01', modelName: 'Archer AX55', status: 'ONLINE', ipAddress: '10.24.11.22', firmwareVersion: 'v2.4.1-stable', lastInform: new Date(), lastContact: new Date(Date.now() - 180000), modelId: createdModels[6].id, clientId: createdClients[1].id },
-    { serial: 'FBHM77889900', mac: 'AA:BB:CC:DD:EE:02', modelName: 'HG6245D', status: 'CRITICAL', ipAddress: '10.24.12.8', firmwareVersion: 'v1.0.9', lastInform: new Date(), lastContact: new Date(Date.now() - 300000), modelId: createdModels[7].id, clientId: createdClients[2].id },
+    { serial: 'ZTEGC0A1B2C3', mac: '00:1A:2B:3C:4D:5E', modelName: 'F660v8', status: DeviceStatus.ONLINE, ipAddress: '10.24.8.112', firmwareVersion: 'v7.2.1', lastInform: new Date(), lastContact: new Date(Date.now() - 120000), modelId: createdModels[0].id, clientId: createdClients[0].id },
+    { serial: 'ZTEGC0A1B2C4', mac: '00:1A:2B:3C:4D:5F', modelName: 'F680v7', status: DeviceStatus.ONLINE, ipAddress: '10.24.8.113', firmwareVersion: 'v6.1.0', lastInform: new Date(), lastContact: new Date(Date.now() - 300000), modelId: createdModels[1].id, clientId: createdClients[1].id },
+    { serial: 'HWTC98765432', mac: 'E4:5F:01:99:A2:BC', modelName: 'HG8245H', status: DeviceStatus.ONLINE, ipAddress: '10.24.9.45', firmwareVersion: 'v105.R018', lastInform: new Date(), lastContact: new Date(Date.now() - 480000), modelId: createdModels[2].id, clientId: createdClients[2].id },
+    { serial: 'HWTC98765433', mac: 'E4:5F:01:99:A2:BD', modelName: 'HG8245W5', status: DeviceStatus.OFFLINE, ipAddress: '10.24.9.46', firmwareVersion: 'v2.0.1', lastInform: new Date(), lastContact: new Date(Date.now() - 86400000), modelId: createdModels[3].id, clientId: createdClients[3].id },
+    { serial: 'ALCL1234ABCD', mac: '88:A9:C2:B4:77:F1', modelName: 'G-240W-B', status: DeviceStatus.OFFLINE, ipAddress: '10.24.4.19', firmwareVersion: 'v3.5.0', lastInform: new Date(), lastContact: new Date(Date.now() - 50400000), modelId: createdModels[4].id, clientId: createdClients[4].id },
+    { serial: 'INTB00112233', mac: 'BC:A9:C2:B4:77:00', modelName: 'RG1200', status: DeviceStatus.ONLINE, ipAddress: '10.24.10.5', firmwareVersion: 'v1.0.4', lastInform: new Date(), lastContact: new Date(Date.now() - 60000), modelId: createdModels[5].id, clientId: createdClients[0].id },
+    { serial: 'TPLK55443322', mac: 'AA:BB:CC:DD:EE:01', modelName: 'Archer AX55', status: DeviceStatus.ONLINE, ipAddress: '10.24.11.22', firmwareVersion: 'v2.4.1-stable', lastInform: new Date(), lastContact: new Date(Date.now() - 180000), modelId: createdModels[6].id, clientId: createdClients[1].id },
+    { serial: 'FBHM77889900', mac: 'AA:BB:CC:DD:EE:02', modelName: 'HG6245D', status: DeviceStatus.CRITICAL, ipAddress: '10.24.12.8', firmwareVersion: 'v1.0.9', lastInform: new Date(), lastContact: new Date(Date.now() - 300000), modelId: createdModels[7].id, clientId: createdClients[2].id },
   ];
 
   for (const d of devices) {

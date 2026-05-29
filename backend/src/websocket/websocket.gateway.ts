@@ -14,7 +14,7 @@ export class WebsocketGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   private clients: Map<string, WebSocket> = new Map();
 

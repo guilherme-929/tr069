@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AcsService } from './acs.service';
 import { CwmpService } from './cwmp.service';

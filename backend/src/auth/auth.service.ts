@@ -97,7 +97,6 @@ export class AuthService {
   async getProfile(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },
-      include: { tenant: true },
       select: {
         id: true,
         email: true,
