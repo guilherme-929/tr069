@@ -1,3 +1,4 @@
+# arquivos que não são compartilhados
 node_modules/
 dist/
 build/
