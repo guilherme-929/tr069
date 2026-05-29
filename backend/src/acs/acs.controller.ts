@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AcsService } from './acs.service';
 import { CwmpService } from './cwmp.service';
@@ -29,16 +29,6 @@ export class AcsController {
   @Get('api/acs/stats')
   getStats(@CurrentUser('tenantId') tenantId: string) {
     return this.acsService.getDashboardStats(tenantId);
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  @Get('api/devices')
-  getDevices(
-    @CurrentUser('tenantId') tenantId: string,
-    @Query() filters: any,
-  ) {
-    return this.acsService.getDevicesList(tenantId, filters);
   }
 
   @ApiBearerAuth()
