@@ -10,3 +10,5 @@ coverage/
 .turbo/
 .next/
 .agent/*
+*.png
+test_login.py
