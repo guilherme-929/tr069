@@ -121,7 +121,7 @@ export class CwmpService {
       timestamp: new Date(),
     });
 
-    await this.prisma.log.create({
+    const newLog = await this.prisma.log.create({
       data: {
         action: eventCodeStr.includes('BOOT') ? 'BOOT' : 'INFORM',
         entity: 'DEVICE',
@@ -131,6 +131,8 @@ export class CwmpService {
         tenantId: device.tenantId,
       },
     });
+
+    this.ws.broadcast('log:new', newLog);
 
     return this.buildInformResponse(device);
   }

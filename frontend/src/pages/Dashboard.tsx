@@ -45,6 +45,12 @@ export default function Dashboard() {
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === 'connection') return;
+
+            if (msg.event === 'log:new' && msg.data) {
+              setLiveLogs((prev) => [msg.data, ...prev].slice(0, 100));
+              return;
+            }
+
             setLiveLogs((prev) => {
               const next = [{ id: Date.now(), action: msg.event || 'EVENT', detail: JSON.stringify(msg.data), createdAt: msg.timestamp || new Date().toISOString(), ...msg }, ...prev];
               return next.slice(0, 100);
