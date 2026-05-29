@@ -16,8 +16,8 @@ export class DevicesService {
       clientId?: string;
     },
   ) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const page = parseInt(query.page as any, 10) || 1;
+    const limit = parseInt(query.limit as any, 10) || 20;
     const skip = (page - 1) * limit;
     const where: any = { tenantId };
 
