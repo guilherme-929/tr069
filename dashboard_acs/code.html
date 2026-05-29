@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>ACS Management - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#dce9ff",
+                        "secondary-fixed": "#6ffbbe",
+                        "on-tertiary-container": "#ff5250",
+                        "on-secondary-container": "#00714d",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "on-background": "#0b1c30",
+                        "on-primary-fixed-variant": "#3c475a",
+                        "surface-container": "#e5eeff",
+                        "surface-bright": "#f8f9ff",
+                        "on-tertiary": "#ffffff",
+                        "surface-dim": "#cbdbf5",
+                        "background": "#f8f9ff",
+                        "surface-tint": "#545f73",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#002113",
+                        "error": "#ba1a1a",
+                        "primary-container": "#1e293b",
+                        "on-surface-variant": "#45474c",
+                        "on-tertiary-fixed-variant": "#930013",
+                        "tertiary-container": "#5a0008",
+                        "primary": "#091426",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary": "#006c49",
+                        "on-primary-container": "#8590a6",
+                        "secondary-fixed-dim": "#4edea3",
+                        "outline-variant": "#c5c6cd",
+                        "tertiary-fixed-dim": "#ffb3ad",
+                        "surface-variant": "#d3e4fe",
+                        "surface-container-low": "#eff4ff",
+                        "primary-fixed-dim": "#bcc7de",
+                        "on-tertiary-fixed": "#410004",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed": "#111c2d",
+                        "on-secondary-fixed-variant": "#005236",
+                        "surface": "#f8f9ff",
+                        "tertiary-fixed": "#ffdad7",
+                        "tertiary": "#330002",
+                        "secondary-container": "#6cf8bb",
+                        "inverse-primary": "#bcc7de",
+                        "outline": "#75777d",
+                        "on-surface": "#0b1c30",
+                        "primary-fixed": "#d8e3fb",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "stack-md": "16px",
+                        "base-unit": "4px",
+                        "stack-sm": "8px",
+                        "container-padding": "24px",
+                        "stack-lg": "32px"
+                    },
+                    "fontFamily": {
+                        "headline-xl": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "code-mono": ["Space Grotesk"],
+                        "body-sm": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "body-base": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-xl": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "code-mono": ["13px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "body-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-base": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- SideNavBar (Authority: JSON) -->
+<aside class="fixed left-0 top-0 h-full w-[240px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col py-4 z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">TR-069 ACS</h1>
+<p class="text-[10px] font-bold text-on-primary-container tracking-widest uppercase opacity-60">Infrastructure v2.4</p>
+</div>
+<nav class="flex-1 space-y-1 px-3">
+<!-- Navigation Items Mapping -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-white border-r-2 border-slate-900 dark:border-slate-400 font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 hover:text-slate-900 dark:hover:text-white font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="router">router</span>
+<span>Devices</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 hover:text-slate-900 dark:hover:text-white font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="developer_board">developer_board</span>
+<span>Models</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 hover:text-slate-900 dark:hover:text-white font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="system_update">system_update</span>
+<span>Firmware</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 hover:text-slate-900 dark:hover:text-white font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="settings_suggest">settings_suggest</span>
+<span>Provisioning</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 hover:text-slate-900 dark:hover:text-white font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span>Clients</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 hover:text-slate-900 dark:hover:text-white font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="px-3 mt-auto space-y-1">
+<div class="h-px bg-slate-200 dark:border-slate-800 mx-3 mb-4"></div>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+<span>System Logs</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50 font-['Inter'] text-xs font-medium uppercase tracking-wider transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="contact_support">contact_support</span>
+<span>Support</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<main class="ml-[240px] flex flex-col min-h-screen">
+<!-- TopAppBar (Authority: JSON) -->
+<header class="h-14 px-6 w-full flex justify-between items-center sticky top-0 border-b border-slate-200 dark:border-slate-800 bg-[#F8FAFC] dark:bg-slate-900 z-40 shadow-sm">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="w-full pl-10 pr-4 py-1.5 bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-primary-container transition-all" placeholder="Search by Serial, MAC, or Device ID..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4 ml-6">
+<div class="flex items-center gap-1">
+<button class="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+<button class="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+<div class="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+<div class="flex items-center gap-3">
+<div class="text-right">
+<p class="text-xs font-bold text-slate-900 dark:text-white leading-none">Admin User</p>
+<p class="text-[10px] text-slate-500 uppercase font-semibold">Superuser</p>
+</div>
+<img class="w-8 h-8 rounded-full border-2 border-slate-100" data-alt="Professional portrait of a male system administrator in a modern office environment with soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuByWd_YvHjjRrNn6J-e7Aewk9EF6_BDtl6OzfXnGTa2BCZsF-Fl9O_PBnYq5XF3bEc8DFVeXFX0P0XIaMlTmEXgn6ne8l47DtJD6-AgEhHmZa8mWka1UeJw2KJHEwrIFdacO5uqk9YXF6nOkHDyMRstkMeV7MiswstVa2GdwzcMGW_pAgUrp74_NjB7giW9UXSpkieZupij1L0u7nxqiu9WupIOGq_dTU6NVZw-5zO7ewHHwZfqC06zOsE0RosKeusTABR807SG6KA2"/>
+</div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-container-padding flex flex-col gap-stack-lg">
+<!-- Summary Stats Bento -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter">
+<!-- Online Card -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-3">
+<span class="material-symbols-outlined text-secondary-fixed-dim opacity-40 group-hover:opacity-100 transition-opacity" data-icon="wifi">wifi</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Online Devices</p>
+<div class="flex items-baseline gap-2 mt-2">
+<h2 class="font-headline-xl text-headline-xl text-secondary">4,821</h2>
+<span class="text-[10px] font-bold text-secondary bg-secondary-container/20 px-1.5 py-0.5 rounded flex items-center">
+<span class="material-symbols-outlined text-[12px]" data-icon="arrow_upward">arrow_upward</span> 2%
+                        </span>
+</div>
+</div>
+<!-- Offline Card -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-3">
+<span class="material-symbols-outlined text-on-tertiary-container opacity-40 group-hover:opacity-100 transition-opacity" data-icon="wifi_off">wifi_off</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Offline Devices</p>
+<div class="flex items-baseline gap-2 mt-2">
+<h2 class="font-headline-xl text-headline-xl text-error">124</h2>
+<span class="text-[10px] font-bold text-error bg-error-container/30 px-1.5 py-0.5 rounded flex items-center">
+<span class="material-symbols-outlined text-[12px]" data-icon="arrow_downward">arrow_downward</span> 0.4%
+                        </span>
+</div>
+</div>
+<!-- Models Card -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors" data-icon="inventory_2">inventory_2</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Registered Models</p>
+<div class="flex items-baseline gap-2 mt-2">
+<h2 class="font-headline-xl text-headline-xl text-slate-900 dark:text-white">56</h2>
+</div>
+</div>
+<!-- Firmware Card -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-3">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors" data-icon="system_update">system_update</span>
+</div>
+<p class="font-label-caps text-label-caps text-on-surface-variant uppercase">Available Firmware</p>
+<div class="flex items-baseline gap-2 mt-2">
+<h2 class="font-headline-xl text-headline-xl text-slate-900 dark:text-white">18</h2>
+<span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">NEW UPDATES</span>
+</div>
+</div>
+</div>
+<!-- Dashboard Center Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Network Health Chart Placeholder -->
+<div class="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
+<div class="flex justify-between items-center mb-6">
+<div>
+<h3 class="font-headline-md text-headline-md text-slate-900 dark:text-white">Network Availability</h3>
+<p class="text-body-sm text-on-surface-variant">Last 24 hours infrastructure throughput</p>
+</div>
+<div class="flex gap-2">
+<button class="text-label-caps bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg">Real-time</button>
+<button class="text-label-caps text-slate-500 px-3 py-1 rounded-lg">24h</button>
+</div>
+</div>
+<div class="h-[300px] w-full bg-slate-50 dark:bg-slate-950/50 rounded-lg flex items-end justify-between px-8 py-4 relative">
+<!-- Mock Waveform/Chart -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<span class="material-symbols-outlined text-slate-200 dark:text-slate-800 text-[120px]">show_chart</span>
+</div>
+<div class="w-8 bg-secondary-fixed-dim/40 h-[60%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim/40 h-[70%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim/60 h-[85%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim h-[95%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim/40 h-[75%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim/40 h-[65%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim/50 h-[80%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim/30 h-[50%] rounded-t-sm"></div>
+<div class="w-8 bg-secondary-fixed-dim/60 h-[90%] rounded-t-sm"></div>
+</div>
+</div>
+<!-- Recent Alerts List -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm overflow-hidden flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-headline-md text-headline-md text-slate-900 dark:text-white">Active Alerts</h3>
+<span class="bg-error text-on-error text-[10px] font-bold px-2 py-0.5 rounded-full">3 CRITICAL</span>
+</div>
+<div class="space-y-4 flex-1">
+<div class="flex gap-4 p-3 rounded-lg bg-error-container/10 border-l-4 border-error">
+<div class="mt-1">
+<span class="material-symbols-outlined text-error" data-icon="report">report</span>
+</div>
+<div>
+<p class="text-body-base font-semibold text-slate-900 dark:text-white">Provisioning Failure</p>
+<p class="text-body-sm text-slate-500">Device SN: AC-4921-FF</p>
+<p class="text-[10px] font-medium text-error mt-1 uppercase">2 mins ago</p>
+</div>
+</div>
+<div class="flex gap-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border-l-4 border-amber-500">
+<div class="mt-1">
+<span class="material-symbols-outlined text-amber-500" data-icon="warning">warning</span>
+</div>
+<div>
+<p class="text-body-base font-semibold text-slate-900 dark:text-white">CWMP Auth Error</p>
+<p class="text-body-sm text-slate-500">Unrecognized MAC: 00:25:96...</p>
+<p class="text-[10px] font-medium text-amber-600 mt-1 uppercase">14 mins ago</p>
+</div>
+</div>
+<div class="flex gap-4 p-3 rounded-lg bg-error-container/10 border-l-4 border-error">
+<div class="mt-1">
+<span class="material-symbols-outlined text-error" data-icon="router">router</span>
+</div>
+<div>
+<p class="text-body-base font-semibold text-slate-900 dark:text-white">Node Down</p>
+<p class="text-body-sm text-slate-500">Subnet 192.168.4.x unreachable</p>
+<p class="text-[10px] font-medium text-error mt-1 uppercase">45 mins ago</p>
+</div>
+</div>
+</div>
+<button class="mt-6 w-full py-2 bg-slate-50 dark:bg-slate-800 text-label-caps text-slate-600 dark:text-slate-400 hover:text-slate-900 transition-colors uppercase">View All Alerts</button>
+</div>
+</div>
+<!-- Recent Devices Table Section -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+<div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+<h3 class="font-headline-md text-headline-md text-slate-900 dark:text-white">Recent Devices</h3>
+<div class="flex gap-2">
+<button class="flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">filter_list</span> Filter
+                        </button>
+<button class="flex items-center gap-1 px-3 py-1.5 bg-primary-container text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-sm">add</span> Add Device
+                        </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-slate-50 dark:bg-slate-900/80">
+<th class="px-6 py-3 font-label-caps text-label-caps text-on-surface-variant border-b border-slate-200 dark:border-slate-800">Status</th>
+<th class="px-6 py-3 font-label-caps text-label-caps text-on-surface-variant border-b border-slate-200 dark:border-slate-800">Model Name</th>
+<th class="px-6 py-3 font-label-caps text-label-caps text-on-surface-variant border-b border-slate-200 dark:border-slate-800">Serial Number</th>
+<th class="px-6 py-3 font-label-caps text-label-caps text-on-surface-variant border-b border-slate-200 dark:border-slate-800">IP Address</th>
+<th class="px-6 py-3 font-label-caps text-label-caps text-on-surface-variant border-b border-slate-200 dark:border-slate-800">Last Inform</th>
+<th class="px-6 py-3 font-label-caps text-label-caps text-on-surface-variant border-b border-slate-200 dark:border-slate-800 text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+<td class="px-6 py-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary-container/20 text-secondary text-[11px] font-bold uppercase">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span> Online
+                                    </span>
+</td>
+<td class="px-6 py-4 text-body-base font-semibold text-slate-900 dark:text-white">ZTE-F660v8</td>
+<td class="px-6 py-4 text-body-base text-on-surface-variant font-['Space_Grotesk']">ZTEGC0A1B2C3</td>
+<td class="px-6 py-4 text-body-base text-on-surface-variant">10.24.8.112</td>
+<td class="px-6 py-4 text-body-sm text-slate-500">2 min ago</td>
+<td class="px-6 py-4 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Diagnostics"><span class="material-symbols-outlined text-sm">analytics</span></button>
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Reboot"><span class="material-symbols-outlined text-sm text-error">restart_alt</span></button>
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Edit"><span class="material-symbols-outlined text-sm">settings</span></button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+<td class="px-6 py-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary-container/20 text-secondary text-[11px] font-bold uppercase">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span> Online
+                                    </span>
+</td>
+<td class="px-6 py-4 text-body-base font-semibold text-slate-900 dark:text-white">Huawei-HG8245H</td>
+<td class="px-6 py-4 text-body-base text-on-surface-variant font-['Space_Grotesk']">HWTC98765432</td>
+<td class="px-6 py-4 text-body-base text-on-surface-variant">10.24.9.45</td>
+<td class="px-6 py-4 text-body-sm text-slate-500">8 min ago</td>
+<td class="px-6 py-4 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Diagnostics"><span class="material-symbols-outlined text-sm">analytics</span></button>
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Reboot"><span class="material-symbols-outlined text-sm text-error">restart_alt</span></button>
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Edit"><span class="material-symbols-outlined text-sm">settings</span></button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group bg-slate-50/30 dark:bg-slate-800/10">
+<td class="px-6 py-4 whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-error-container/30 text-error text-[11px] font-bold uppercase">
+<span class="w-2 h-2 rounded-full bg-error"></span> Offline
+                                    </span>
+</td>
+<td class="px-6 py-4 text-body-base font-semibold text-slate-900 dark:text-white">Nokia-G-240W-B</td>
+<td class="px-6 py-4 text-body-base text-on-surface-variant font-['Space_Grotesk']">ALCL1234ABCD</td>
+<td class="px-6 py-4 text-body-base text-on-surface-variant">10.24.4.19</td>
+<td class="px-6 py-4 text-body-sm text-slate-500">14 hours ago</td>
+<td class="px-6 py-4 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Diagnostics"><span class="material-symbols-outlined text-sm">analytics</span></button>
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Reboot"><span class="material-symbols-outlined text-sm text-error">restart_alt</span></button>
+<button class="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors" title="Edit"><span class="material-symbols-outlined text-sm">settings</span></button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Logs Terminal Section -->
+<div class="bg-slate-950 text-white rounded-xl shadow-2xl overflow-hidden">
+<div class="px-4 py-2 bg-slate-900 border-b border-slate-800 flex justify-between items-center">
+<div class="flex items-center gap-2">
+<div class="flex gap-1.5">
+<div class="w-3 h-3 rounded-full bg-red-500/50"></div>
+<div class="w-3 h-3 rounded-full bg-amber-500/50"></div>
+<div class="w-3 h-3 rounded-full bg-green-500/50"></div>
+</div>
+<span class="font-code-mono text-[11px] text-slate-400 ml-4">SYSTEM LOGS - LIVE STREAM</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="flex items-center gap-2 text-[10px] text-green-500 uppercase font-bold animate-pulse">
+<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Connected
+                        </span>
+<span class="material-symbols-outlined text-slate-500 text-sm cursor-pointer hover:text-white">close</span>
+</div>
+</div>
+<div class="p-4 font-code-mono text-code-mono leading-6 max-h-[160px] overflow-y-auto space-y-1">
+<p><span class="text-slate-500">[2023-10-24 14:22:01]</span> <span class="text-blue-400">INFO</span> CWMP worker started on thread #14</p>
+<p><span class="text-slate-500">[2023-10-24 14:22:05]</span> <span class="text-green-400">AUTH</span> Device ZTEGC0A1B2C3 authenticated successfully</p>
+<p><span class="text-slate-500">[2023-10-24 14:22:08]</span> <span class="text-amber-400">WARN</span> HTTP session timeout for IP 10.24.12.5</p>
+<p><span class="text-slate-500">[2023-10-24 14:22:15]</span> <span class="text-red-400">ERROR</span> Provisioning script "Default_F660" failed at step 4: XML_PARSE_ERROR</p>
+<p><span class="text-slate-500">[2023-10-24 14:22:20]</span> <span class="text-blue-400">INFO</span> Periodic Inform received from MAC: 00:25:96:AA:BB:CC</p>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB (Authority: JSON/Manual Extension for high-tech feel) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50">
+<span class="material-symbols-outlined" data-icon="terminal">terminal</span>
+</button>
+</body></html>

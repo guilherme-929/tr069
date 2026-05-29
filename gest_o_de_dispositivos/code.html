@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=Space+Grotesk:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary": "#ffffff",
+                    "surface-container-high": "#dce9ff",
+                    "secondary-fixed": "#6ffbbe",
+                    "on-tertiary-container": "#ff5250",
+                    "on-secondary-container": "#00714d",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-surface": "#213145",
+                    "on-background": "#0b1c30",
+                    "on-primary-fixed-variant": "#3c475a",
+                    "surface-container": "#e5eeff",
+                    "surface-bright": "#f8f9ff",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#cbdbf5",
+                    "background": "#f8f9ff",
+                    "surface-tint": "#545f73",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-error": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "on-secondary-fixed": "#002113",
+                    "error": "#ba1a1a",
+                    "primary-container": "#1e293b",
+                    "on-surface-variant": "#45474c",
+                    "on-tertiary-fixed-variant": "#930013",
+                    "tertiary-container": "#5a0008",
+                    "primary": "#091426",
+                    "surface-container-highest": "#d3e4fe",
+                    "secondary": "#006c49",
+                    "on-primary-container": "#8590a6",
+                    "secondary-fixed-dim": "#4edea3",
+                    "outline-variant": "#c5c6cd",
+                    "tertiary-fixed-dim": "#ffb3ad",
+                    "surface-variant": "#d3e4fe",
+                    "surface-container-low": "#eff4ff",
+                    "primary-fixed-dim": "#bcc7de",
+                    "on-tertiary-fixed": "#410004",
+                    "error-container": "#ffdad6",
+                    "on-primary-fixed": "#111c2d",
+                    "on-secondary-fixed-variant": "#005236",
+                    "surface": "#f8f9ff",
+                    "tertiary-fixed": "#ffdad7",
+                    "tertiary": "#330002",
+                    "secondary-container": "#6cf8bb",
+                    "inverse-primary": "#bcc7de",
+                    "outline": "#75777d",
+                    "on-surface": "#0b1c30",
+                    "primary-fixed": "#d8e3fb",
+                    "on-primary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "gutter": "16px",
+                    "stack-md": "16px",
+                    "base-unit": "4px",
+                    "stack-sm": "8px",
+                    "container-padding": "24px",
+                    "stack-lg": "32px"
+            },
+            "fontFamily": {
+                    "headline-xl": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "code-mono": ["Space Grotesk"],
+                    "body-sm": ["Inter"],
+                    "label-caps": ["Inter"],
+                    "body-base": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-xl": ["30px", {"lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "code-mono": ["13px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "body-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "label-caps": ["11px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-base": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .sidebar-active {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            border-right: 2px solid #0f172a;
+        }
+    </style>
+</head>
+<body class="bg-background font-body-base text-on-background overflow-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[240px] border-r bg-white border-slate-200 flex flex-col py-4 z-50">
+<div class="px-6 mb-8">
+<h1 class="text-xl font-black text-slate-900 tracking-tight">TR-069 ACS</h1>
+<p class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Infrastructure v2.4</p>
+</div>
+<nav class="flex-1 space-y-1">
+<div class="px-3 py-2">
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer group">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="dashboard">dashboard</span>
+<span class="font-label-caps text-label-caps uppercase">Dashboard</span>
+</div>
+</div>
+<div class="px-3 py-1">
+<div class="flex items-center px-3 py-2 bg-slate-100 text-slate-900 border-r-2 border-slate-900 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="router">router</span>
+<span class="font-label-caps text-label-caps uppercase">Devices</span>
+</div>
+</div>
+<div class="px-3 py-1">
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="developer_board">developer_board</span>
+<span class="font-label-caps text-label-caps uppercase">Models</span>
+</div>
+</div>
+<div class="px-3 py-1">
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="system_update">system_update</span>
+<span class="font-label-caps text-label-caps uppercase">Firmware</span>
+</div>
+</div>
+<div class="px-3 py-1">
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="settings_suggest">settings_suggest</span>
+<span class="font-label-caps text-label-caps uppercase">Provisioning</span>
+</div>
+</div>
+<div class="px-3 py-1">
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="group">group</span>
+<span class="font-label-caps text-label-caps uppercase">Clients</span>
+</div>
+</div>
+<div class="px-3 py-1">
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="settings">settings</span>
+<span class="font-label-caps text-label-caps uppercase">Settings</span>
+</div>
+</div>
+</nav>
+<div class="mt-auto px-3 border-t border-slate-100 pt-4">
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="terminal">terminal</span>
+<span class="font-label-caps text-label-caps uppercase">System Logs</span>
+</div>
+<div class="flex items-center px-3 py-2 text-slate-500 hover:bg-slate-50 transition-all duration-200 rounded-sm cursor-pointer">
+<span class="material-symbols-outlined mr-3 text-[20px]" data-icon="contact_support">contact_support</span>
+<span class="font-label-caps text-label-caps uppercase">Support</span>
+</div>
+<div class="flex items-center gap-3 px-3 py-4 mt-2">
+<img alt="Admin" class="w-8 h-8 rounded-full border border-slate-200" data-alt="professional portrait of a network system administrator in a corporate setting with soft background lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlP-Ro8xQmmiPndohOhvS1W6PMRNF0IbPWushBLyF00R5ZLxT_kfZJhhyHqCpYQvABcP8pF1VhV-CK2lYiNOWHEHAwv3aIAnZDIy2RMm0r25waRBBORsS2LhsXb_vJShC85yNcdjlBreN6KZDjo_pfRJS86qc8TE8O8HFKhcK4Wq3sNJQSaPrdZVGuBZA1APb28YrXSXcWkSl56c6EhOYfMvlKgSwt6puq_AlRXw981httt8c-dy3KtM46zaldAFbiqWnYfIb70jjV"/>
+<div class="flex flex-col">
+<span class="text-[12px] font-bold text-slate-900 leading-tight">Admin User</span>
+<span class="text-[10px] text-slate-500 uppercase">Superuser</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 left-[240px] right-0 h-14 bg-[#F8FAFC] border-b border-slate-200 flex items-center justify-between px-6 z-40 shadow-sm">
+<div class="flex items-center flex-1">
+<div class="relative w-full max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]" data-icon="search">search</span>
+<input class="w-full bg-white border border-slate-200 rounded-lg pl-10 pr-4 py-1.5 text-body-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all" placeholder="Search CPE by Serial, MAC, or IP..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer relative">
+<span class="material-symbols-outlined text-[20px]" data-icon="notifications">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full border-2 border-white"></span>
+</button>
+<button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[20px]" data-icon="help">help</span>
+</button>
+<div class="h-6 w-px bg-slate-200 mx-2"></div>
+<button class="flex items-center gap-2 text-slate-800 font-semibold text-sm hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[24px]" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-[240px] mt-14 p-6 h-[calc(100vh-56px)] flex gap-6 overflow-hidden">
+<!-- Center Panel: Device List -->
+<div class="flex-1 flex flex-col gap-6 overflow-hidden">
+<!-- Header & Filters -->
+<div class="flex items-end justify-between">
+<div>
+<h2 class="font-headline-xl text-headline-xl text-on-background">Device Management</h2>
+<p class="text-body-sm text-slate-500 mt-1">Monitor and configure CPE inventory across the network.</p>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-body-sm font-semibold shadow-md hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-[18px]" data-icon="add">add</span>
+                        New Provisioning
+                    </button>
+</div>
+</div>
+<!-- Advanced Filters -->
+<div class="grid grid-cols-4 gap-4">
+<div class="bg-white p-2 rounded-xl border border-slate-200 flex flex-col">
+<label class="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">Status</label>
+<select class="bg-transparent border-none focus:ring-0 text-body-sm font-semibold cursor-pointer">
+<option>All Statuses</option>
+<option>Online</option>
+<option>Offline</option>
+<option>Provisioning</option>
+</select>
+</div>
+<div class="bg-white p-2 rounded-xl border border-slate-200 flex flex-col">
+<label class="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">Model</label>
+<select class="bg-transparent border-none focus:ring-0 text-body-sm font-semibold cursor-pointer">
+<option>All Models</option>
+<option>Archer AX50</option>
+<option>RT-AX88U</option>
+<option>Fritz!Box 7590</option>
+</select>
+</div>
+<div class="bg-white p-2 rounded-xl border border-slate-200 flex flex-col">
+<label class="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">Firmware</label>
+<select class="bg-transparent border-none focus:ring-0 text-body-sm font-semibold cursor-pointer">
+<option>All Versions</option>
+<option>v2.4.0 (Stable)</option>
+<option>v2.3.9 (Legacy)</option>
+<option>v2.5.1 (Beta)</option>
+</select>
+</div>
+<div class="bg-white p-2 rounded-xl border border-slate-200 flex flex-col">
+<label class="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">Quick Tags</label>
+<div class="flex gap-1 px-2 pb-1 overflow-x-auto no-scrollbar">
+<span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full whitespace-nowrap">IPv6 Enabled</span>
+<span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full whitespace-nowrap">Mesh Node</span>
+</div>
+</div>
+</div>
+<!-- Table Card -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col flex-1 overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-white z-10">
+<tr class="border-b border-slate-100">
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Serial Number</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">MAC Address</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Model</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Current Firmware</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest text-center">Signal</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">Last Contact</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-50">
+<!-- Row 1 (Selected) -->
+<tr class="hover:bg-slate-50/50 transition-colors group cursor-pointer bg-blue-50/30">
+<td class="px-4 py-3 text-body-sm font-code-mono font-bold text-slate-900">ACS-2948-XG12</td>
+<td class="px-4 py-3 text-body-sm font-code-mono text-slate-600">00:1A:2B:3C:4D:5E</td>
+<td class="px-4 py-3 text-body-sm text-slate-900">Archer AX50</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<span class="text-body-sm text-slate-900">v2.4.0</span>
+<span class="text-[10px] bg-secondary-container text-on-secondary-container px-1.5 rounded font-bold uppercase">Stable</span>
+</div>
+</td>
+<td class="px-4 py-3 text-center">
+<div class="flex justify-center items-end gap-0.5 h-3">
+<div class="w-1 h-1 bg-secondary rounded-full"></div>
+<div class="w-1 h-2 bg-secondary rounded-full"></div>
+<div class="w-1 h-3 bg-secondary rounded-full"></div>
+<div class="w-1 h-1.5 bg-slate-200 rounded-full"></div>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-secondary-container text-on-secondary-container">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Online
+                                    </span>
+</td>
+<td class="px-4 py-3 text-body-sm text-slate-500">2 mins ago</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-slate-50/50 transition-colors cursor-pointer">
+<td class="px-4 py-3 text-body-sm font-code-mono font-bold text-slate-900">ACS-8821-FK09</td>
+<td class="px-4 py-3 text-body-sm font-code-mono text-slate-600">E4:5F:01:99:A2:BC</td>
+<td class="px-4 py-3 text-body-sm text-slate-900">RT-AX88U</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<span class="text-body-sm text-slate-900">v2.3.9</span>
+<span class="text-[10px] bg-surface-container text-slate-600 px-1.5 rounded font-bold uppercase">Update Available</span>
+</div>
+</td>
+<td class="px-4 py-3 text-center">
+<div class="flex justify-center items-end gap-0.5 h-3 opacity-50">
+<div class="w-1 h-1 bg-slate-200 rounded-full"></div>
+<div class="w-1 h-2 bg-slate-200 rounded-full"></div>
+<div class="w-1 h-3 bg-slate-200 rounded-full"></div>
+<div class="w-1 h-1.5 bg-slate-200 rounded-full"></div>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-400">
+<span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span> Offline
+                                    </span>
+</td>
+<td class="px-4 py-3 text-body-sm text-slate-500">14 hours ago</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-slate-50/50 transition-colors cursor-pointer">
+<td class="px-4 py-3 text-body-sm font-code-mono font-bold text-slate-900">ACS-1102-LL56</td>
+<td class="px-4 py-3 text-body-sm font-code-mono text-slate-600">88:A9:C2:B4:77:F1</td>
+<td class="px-4 py-3 text-body-sm text-slate-900">Fritz!Box 7590</td>
+<td class="px-4 py-3 text-body-sm text-slate-900">v2.4.0</td>
+<td class="px-4 py-3 text-center">
+<div class="flex justify-center items-end gap-0.5 h-3">
+<div class="w-1 h-1 bg-secondary rounded-full"></div>
+<div class="w-1 h-2 bg-secondary rounded-full"></div>
+<div class="w-1 h-3 bg-secondary rounded-full"></div>
+<div class="w-1 h-4 bg-secondary rounded-full"></div>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-secondary-container text-on-secondary-container">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span> Online
+                                    </span>
+</td>
+<td class="px-4 py-3 text-body-sm text-slate-500">Just now</td>
+</tr>
+<!-- More rows for visual fullness -->
+<tr class="hover:bg-slate-50/50 transition-colors cursor-pointer">
+<td class="px-4 py-3 text-body-sm font-code-mono font-bold text-slate-900">ACS-4402-PP12</td>
+<td class="px-4 py-3 text-body-sm font-code-mono text-slate-600">BC:A9:C2:B4:77:00</td>
+<td class="px-4 py-3 text-body-sm text-slate-900">Archer AX50</td>
+<td class="px-4 py-3 text-body-sm text-slate-900">v2.4.0</td>
+<td class="px-4 py-3 text-center">
+<div class="flex justify-center items-end gap-0.5 h-3">
+<div class="w-1 h-1 bg-secondary rounded-full"></div>
+<div class="w-1 h-2 bg-secondary rounded-full"></div>
+<div class="w-1 h-1.5 bg-slate-200 rounded-full"></div>
+<div class="w-1 h-1 bg-slate-200 rounded-full"></div>
+</div>
+</td>
+<td class="px-4 py-3">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-error-container text-on-error-container">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span> Critical
+                                    </span>
+</td>
+<td class="px-4 py-3 text-body-sm text-slate-500">5 mins ago</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="mt-auto border-t border-slate-100 p-4 flex items-center justify-between">
+<span class="text-body-sm text-slate-500">Showing 1-4 of 1,284 devices</span>
+<div class="flex items-center gap-2">
+<button class="p-1 border border-slate-200 rounded hover:bg-slate-50 text-slate-500"><span class="material-symbols-outlined text-[18px]" data-icon="chevron_left">chevron_left</span></button>
+<button class="w-8 h-8 flex items-center justify-center bg-primary text-white rounded text-body-sm font-bold">1</button>
+<button class="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded text-body-sm font-bold">2</button>
+<button class="w-8 h-8 flex items-center justify-center hover:bg-slate-100 rounded text-body-sm font-bold">3</button>
+<button class="p-1 border border-slate-200 rounded hover:bg-slate-50 text-slate-500"><span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Side Panel: Device Details -->
+<div class="w-[400px] flex flex-col bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden animate-in slide-in-from-right duration-300">
+<!-- Panel Header -->
+<div class="p-5 border-b border-slate-100 bg-slate-50/50">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[32px]" data-icon="router">router</span>
+</div>
+<div>
+<h3 class="text-headline-md font-headline-md text-on-background">ACS-2948-XG12</h3>
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-bold text-secondary uppercase">Online</span>
+<span class="text-[10px] font-medium text-slate-400">|</span>
+<span class="text-[10px] font-medium text-slate-500">Archer AX50</span>
+</div>
+</div>
+</div>
+<button class="text-slate-400 hover:text-slate-600 transition-colors">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+</button>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-4">
+<button class="flex items-center justify-center gap-2 py-2 bg-slate-900 text-white rounded-lg text-[12px] font-bold hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-[16px]" data-icon="restart_alt">restart_alt</span> Reboot
+                    </button>
+<button class="flex items-center justify-center gap-2 py-2 border border-slate-200 rounded-lg text-[12px] font-bold hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-[16px]" data-icon="bolt">bolt</span> Provision
+                    </button>
+<button class="flex items-center justify-center gap-2 py-2 border border-slate-200 rounded-lg text-[12px] font-bold hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-[16px]" data-icon="cloud_download">cloud_download</span> Update
+                    </button>
+<button class="flex items-center justify-center gap-2 py-2 border border-error/20 text-error rounded-lg text-[12px] font-bold hover:bg-error/5 transition-colors">
+<span class="material-symbols-outlined text-[16px]" data-icon="factory">factory</span> Reset
+                    </button>
+</div>
+</div>
+<!-- Panel Tabs -->
+<div class="flex border-b border-slate-100 px-4">
+<button class="px-4 py-3 text-[11px] font-bold uppercase border-b-2 border-primary text-primary">Overview</button>
+<button class="px-4 py-3 text-[11px] font-bold uppercase text-slate-400 border-b-2 border-transparent hover:text-slate-600">TR-069 Params</button>
+<button class="px-4 py-3 text-[11px] font-bold uppercase text-slate-400 border-b-2 border-transparent hover:text-slate-600">Network</button>
+<button class="px-4 py-3 text-[11px] font-bold uppercase text-slate-400 border-b-2 border-transparent hover:text-slate-600">Logs</button>
+</div>
+<!-- Scrollable Content -->
+<div class="flex-1 overflow-y-auto p-5 space-y-6">
+<!-- Parameters Group -->
+<section>
+<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">System Information</h4>
+<div class="space-y-3">
+<div class="flex justify-between items-center py-1 border-b border-slate-50">
+<span class="text-body-sm text-slate-500">Uptime</span>
+<span class="text-body-sm font-semibold text-slate-900">4 days, 12h 44m</span>
+</div>
+<div class="flex justify-between items-center py-1 border-b border-slate-50">
+<span class="text-body-sm text-slate-500">Hardware Rev</span>
+<span class="text-body-sm font-semibold text-slate-900">v1.2.a</span>
+</div>
+<div class="flex justify-between items-center py-1 border-b border-slate-50">
+<span class="text-body-sm text-slate-500">Public IP</span>
+<span class="text-body-sm font-semibold text-slate-900">192.168.1.104</span>
+</div>
+<div class="flex justify-between items-center py-1 border-b border-slate-50">
+<span class="text-body-sm text-slate-500">CPU Load</span>
+<div class="flex items-center gap-2">
+<div class="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+<div class="w-[34%] h-full bg-secondary"></div>
+</div>
+<span class="text-body-sm font-semibold text-slate-900">34%</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Connectivity -->
+<section>
+<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Wireless (WLAN)</h4>
+<div class="p-3 bg-slate-50 rounded-lg border border-slate-100">
+<div class="flex items-center justify-between mb-2">
+<span class="text-[11px] font-bold text-slate-900">SSID: ACS_Enterprise_5G</span>
+<span class="px-1.5 py-0.5 bg-secondary text-white text-[9px] font-bold rounded uppercase">Active</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="text-[10px] text-slate-400 uppercase font-bold">Frequency</p>
+<p class="text-body-sm font-semibold text-slate-900">5.0 GHz</p>
+</div>
+<div>
+<p class="text-[10px] text-slate-400 uppercase font-bold">Clients</p>
+<p class="text-body-sm font-semibold text-slate-900">14 Connected</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Activity Log Preview -->
+<section>
+<h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Events</h4>
+<div class="space-y-4 relative before:content-[''] before:absolute before:left-2 before:top-2 before:bottom-2 before:w-px before:bg-slate-100">
+<div class="relative pl-7">
+<div class="absolute left-0 top-1 w-4 h-4 bg-secondary-container rounded-full flex items-center justify-center">
+<span class="w-1.5 h-1.5 bg-secondary rounded-full"></span>
+</div>
+<p class="text-body-sm font-semibold text-slate-900 leading-tight">Periodic Inform Received</p>
+<p class="text-[10px] text-slate-400">Just now • Event: 2 PERIODIC</p>
+</div>
+<div class="relative pl-7">
+<div class="absolute left-0 top-1 w-4 h-4 bg-slate-100 rounded-full flex items-center justify-center">
+<span class="w-1.5 h-1.5 bg-slate-400 rounded-full"></span>
+</div>
+<p class="text-body-sm font-semibold text-slate-900 leading-tight">Parameter Value Change</p>
+<p class="text-[10px] text-slate-400">5 mins ago • path: InternetGatewayDevice.WLAN...</p>
+</div>
+<div class="relative pl-7">
+<div class="absolute left-0 top-1 w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center">
+<span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+</div>
+<p class="text-body-sm font-semibold text-slate-900 leading-tight">Device Rebooted</p>
+<p class="text-[10px] text-slate-400">12 mins ago • Trigger: Remote Request</p>
+</div>
+</div>
+</section>
+</div>
+<!-- Panel Footer/Action Area -->
+<div class="p-4 bg-slate-900 border-t border-slate-800">
+<div class="flex items-center justify-between mb-3">
+<span class="text-[11px] font-bold text-slate-400 uppercase">Interactive Terminal</span>
+<span class="text-[10px] font-code-mono text-secondary">READY &gt;_</span>
+</div>
+<div class="font-code-mono text-[11px] text-slate-300 bg-slate-950 p-3 rounded border border-slate-800">
+<p class="text-secondary">$ get_params "Device.ManagementServer.URL"</p>
+<p class="mt-1 text-slate-400">&gt;&gt; http://acs.cloud-net.infra/api/cwmp</p>
+<p class="mt-2 text-secondary animate-pulse">_</p>
+</div>
+</div>
+</div>
+</main>
+</body></html>

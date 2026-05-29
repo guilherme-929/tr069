@@ -1,0 +1,293 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TECHNICIAN
+  OPERATOR
+  READONLY
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  PROVISIONING
+  ERROR
+  CRITICAL
+}
+
+enum FirmwareStatus {
+  LATEST
+  STABLE
+  DEPRECATED
+  BETA
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertType {
+  DEVICE_OFFLINE
+  OLD_FIRMWARE
+  PROVISIONING_FAILURE
+  ACS_SESSION_LOST
+  EXCESSIVE_REBOOT
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  devices  Device[]
+  clients  Client[]
+  sessions Session[]
+  logs     Log[]
+  alerts   Alert[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String
+  name         String
+  role         Role     @default(OPERATOR)
+  avatar       String?
+  isActive     Boolean  @default(true)
+  refreshToken String?
+  tenantId     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  logs   Log[]
+
+  @@index([tenantId])
+  @@index([email])
+}
+
+model Device {
+  id              String       @id @default(cuid())
+  serial          String       @unique
+  mac             String       @unique
+  modelName       String
+  firmwareVersion String?
+  status          DeviceStatus @default(OFFLINE)
+  ipAddress       String?
+  wanIp           String?
+  uptime          Int          @default(0)
+  signal          Int?
+  lastInform      DateTime?
+  lastContact     DateTime?
+  tenantId        String
+  modelId         String?
+  clientId        String?
+  firmwareId      String?
+  tags            String[]
+  parameters      Json?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id])
+  model    DeviceModel?  @relation(fields: [modelId], references: [id])
+  client   Client?       @relation(fields: [clientId], references: [id])
+  firmware Firmware?     @relation(fields: [firmwareId], references: [id])
+  sessions Session[]
+  tasks    Task[]
+  events   Event[]
+  logs     Log[]
+  alerts   Alert[]
+
+  @@index([tenantId])
+  @@index([serial])
+  @@index([mac])
+  @@index([status])
+  @@index([modelId])
+  @@index([clientId])
+}
+
+model DeviceModel {
+  id          String   @id @default(cuid())
+  manufacturer String
+  name        String
+  hwVersion   String?
+  dataModel   String   @default("TR-181")
+  description String?
+  defaultParameters Json?
+  provisioningScript String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenantId   String
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  devices    Device[]
+  firmwares  Firmware[]
+
+  @@unique([manufacturer, name, tenantId])
+  @@index([tenantId])
+}
+
+model Firmware {
+  id          String        @id @default(cuid())
+  version     String
+  changelog   String?
+  status      FirmwareStatus @default(STABLE)
+  fileName    String?
+  fileSize    Int?
+  filePath    String?
+  modelId     String
+  tenantId    String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  model   DeviceModel @relation(fields: [modelId], references: [id])
+  tenant  Tenant      @relation(fields: [tenantId], references: [id])
+  devices Device[]
+
+  @@index([modelId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  deviceId  String
+  event     String   @default("0 BOOTSTRAP")
+  data      Json?
+  status    String   @default("ACTIVE")
+  tenantId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  device Device @relation(fields: [deviceId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([deviceId])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  deviceId    String
+  type        String
+  status      TaskStatus @default(PENDING)
+  payload     Json?
+  result      Json?
+  error       String?
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(3)
+  tenantId    String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  device Device @relation(fields: [deviceId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([deviceId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([type])
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  deviceId  String
+  code      String
+  message   String?
+  data      Json?
+  tenantId  String
+  createdAt DateTime @default(now())
+
+  device Device @relation(fields: [deviceId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([deviceId])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  userId    String?
+  deviceId  String?
+  tenantId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  device Device? @relation(fields: [deviceId], references: [id])
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  document    String?
+  contract    String?
+  email       String?
+  phone       String?
+  plan        String?
+  isActive    Boolean  @default(true)
+  tenantId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  devices  Device[]
+
+  @@index([tenantId])
+  @@index([document])
+}
+
+model Alert {
+  id        String        @id @default(cuid())
+  type      AlertType
+  severity  AlertSeverity @default(WARNING)
+  title     String
+  message   String?
+  deviceId  String?
+  tenantId  String
+  read      Boolean       @default(false)
+  resolved  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  device Device? @relation(fields: [deviceId], references: [id])
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([deviceId])
+  @@index([read])
+  @@index([resolved])
+  @@index([severity])
+}
