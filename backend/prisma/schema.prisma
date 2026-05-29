@@ -94,6 +94,7 @@ model Device {
   id              String       @id @default(cuid())
   serial          String       @unique
   mac             String       @unique
+  manufacturer    String?
   modelName       String
   firmwareVersion String?
   status          DeviceStatus @default(OFFLINE)

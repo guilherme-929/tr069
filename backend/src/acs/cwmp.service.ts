@@ -58,6 +58,7 @@ export class CwmpService {
         data: {
           status: 'ONLINE',
           ipAddress,
+          manufacturer: manufacturer || device.manufacturer,
           firmwareVersion: firmwareVersion || device.firmwareVersion,
           uptime: uptime || device.uptime,
           lastInform: new Date(),
@@ -66,11 +67,21 @@ export class CwmpService {
         },
       });
     } else {
+      let modelId: string | undefined;
+      if (manufacturer && modelName) {
+        const model = await this.prisma.deviceModel.findFirst({
+          where: { manufacturer, name: modelName },
+        });
+        if (model) modelId = model.id;
+      }
+
       device = await this.prisma.device.create({
         data: {
           serial,
           mac,
-          modelName: modelName || 'Unknown',
+          manufacturer,
+          modelName,
+          modelId,
           firmwareVersion,
           status: 'ONLINE',
           ipAddress,
