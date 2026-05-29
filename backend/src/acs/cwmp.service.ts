@@ -110,6 +110,17 @@ export class CwmpService {
       timestamp: new Date(),
     });
 
+    await this.prisma.log.create({
+      data: {
+        action: eventCodeStr.includes('BOOT') ? 'BOOT' : 'INFORM',
+        entity: 'DEVICE',
+        entityId: device.id,
+        detail: `Inform received from ${serial} (${manufacturer} ${modelName}) - events: ${eventCodeStr}`,
+        deviceId: device.id,
+        tenantId: device.tenantId,
+      },
+    });
+
     return this.buildInformResponse(device);
   }
 

@@ -16,6 +16,8 @@ export default function Dashboard() {
   });
   const [recentDevices, setRecentDevices] = useState<any[]>([]);
   const [models, setModels] = useState<any[]>([]);
+  const [liveLogs, setLiveLogs] = useState<any[]>([]);
+  const [wsConnected, setWsConnected] = useState(false);
 
   useEffect(() => {
     api.get('/acs/stats').then(({ data }) => setStats(data)).catch(() => {});
@@ -24,6 +26,46 @@ export default function Dashboard() {
       const items = data.data || data || [];
       setModels(items.slice(0, 8));
     }).catch(() => {});
+    api.get('/logs', { params: { limit: 20 } }).then(({ data }) => {
+      if (data.data) setLiveLogs(data.data);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    let ws: WebSocket | null = null;
+    let reconnectTimer: any = null;
+
+    function connect() {
+      try {
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => setWsConnected(true);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'connection') return;
+            setLiveLogs((prev) => {
+              const next = [{ id: Date.now(), action: msg.event || 'EVENT', detail: JSON.stringify(msg.data), createdAt: msg.timestamp || new Date().toISOString(), ...msg }, ...prev];
+              return next.slice(0, 100);
+            });
+          } catch {}
+        };
+        ws.onclose = () => {
+          setWsConnected(false);
+          reconnectTimer = setTimeout(connect, 3000);
+        };
+        ws.onerror = () => ws?.close();
+      } catch {
+        reconnectTimer = setTimeout(connect, 3000);
+      }
+    }
+
+    connect();
+    return () => {
+      if (ws) ws.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
   }, []);
 
   const cards = [
@@ -199,28 +241,30 @@ export default function Dashboard() {
             </div>
             <span className="font-mono text-[11px] text-slate-400 ml-4">SYSTEM LOGS - LIVE STREAM</span>
           </div>
-          <span className="flex items-center gap-2 text-[10px] text-green-500 uppercase font-bold">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span> Connected
+          <span className={`flex items-center gap-2 text-[10px] uppercase font-bold ${wsConnected ? 'text-green-500' : 'text-red-500'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></span> {wsConnected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
         <div className="p-4 font-mono text-[13px] leading-6 max-h-[160px] overflow-y-auto space-y-1">
-          {[
-            '[2024-10-24 14:22:01] INFO  CWMP worker started on thread #14',
-            '[2024-10-24 14:22:05] AUTH  Device ZTEGC0A1B2C3 authenticated successfully',
-            '[2024-10-24 14:22:08] WARN  HTTP session timeout for IP 10.24.12.5',
-            '[2024-10-24 14:22:15] ERROR Provisioning script "Default_F660" failed at step 4: XML_PARSE_ERROR',
-            '[2024-10-24 14:22:20] INFO  Periodic Inform received from MAC: 00:25:96:AA:BB:CC',
-          ].map((line, i) => (
-            <p key={i}>
-              <span className="text-slate-500">{line.split(' ').slice(0, 2).join(' ')}</span>{' '}
-              <span className={
-                line.includes('ERROR') ? 'text-red-400' :
-                line.includes('AUTH') ? 'text-green-400' :
-                line.includes('WARN') ? 'text-amber-400' : 'text-blue-400'
-              }>{line.split(' ').slice(2, 3).join(' ')}</span>{' '}
-              {line.split(' ').slice(3).join(' ')}
-            </p>
-          ))}
+          {liveLogs.length === 0 && (
+            <p className="text-slate-500 italic">Waiting for events...</p>
+          )}
+          {liveLogs.map((log: any) => {
+            const action = log.action || log.event || 'INFO';
+            const time = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
+            const detail = log.detail || log.message || JSON.stringify(log.data || '');
+            return (
+              <p key={log.id || Math.random()}>
+                <span className="text-slate-500">{time}</span>{' '}
+                <span className={
+                  action === 'ERROR' ? 'text-red-400' :
+                  action === 'INFORM' || action === 'BOOT' || action === 'AUTH' ? 'text-green-400' :
+                  action === 'WARN' ? 'text-amber-400' : 'text-blue-400'
+                }>{action}</span>{' '}
+                {detail}
+              </p>
+            );
+          })}
         </div>
       </div>
     </div>
