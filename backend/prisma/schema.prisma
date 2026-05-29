@@ -58,12 +58,16 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
-  devices  Device[]
-  clients  Client[]
-  sessions Session[]
-  logs     Log[]
-  alerts   Alert[]
+  users        User[]
+  devices      Device[]
+  deviceModels DeviceModel[]
+  firmwares    Firmware[]
+  clients      Client[]
+  sessions     Session[]
+  tasks        Task[]
+  events       Event[]
+  logs         Log[]
+  alerts       Alert[]
 }
 
 model User {
