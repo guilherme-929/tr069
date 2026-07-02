@@ -133,11 +133,23 @@ export class CwmpService {
       }
     }
 
-    const ipAddress = inform.DeviceId?.IPAddress || paramMap['Device.IP.Interface.1.IPv4Address'] || '';
-    const firmwareVersion = paramMap['Device.DeviceInfo.SoftwareVersion'] || '';
-    const hardwareVersion = paramMap['Device.DeviceInfo.HardwareVersion'] || '';
-    const uptime = parseInt(paramMap['Device.DeviceInfo.UpTime'] || '0', 10);
-    const connectionRequestUrl = paramMap['Device.ManagementServer.ConnectionRequestURL'] || '';
+    const ipAddress = inform.DeviceId?.IPAddress
+      || paramMap['Device.IP.Interface.1.IPv4Address']
+      || paramMap['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress']
+      || paramMap['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress']
+      || '';
+    const firmwareVersion = paramMap['Device.DeviceInfo.SoftwareVersion']
+      || paramMap['InternetGatewayDevice.DeviceInfo.SoftwareVersion']
+      || '';
+    const hardwareVersion = paramMap['Device.DeviceInfo.HardwareVersion']
+      || paramMap['InternetGatewayDevice.DeviceInfo.HardwareVersion']
+      || '';
+    const uptime = parseInt(
+      paramMap['Device.DeviceInfo.UpTime'] || paramMap['InternetGatewayDevice.DeviceInfo.UpTime'] || '0', 10
+    );
+    const connectionRequestUrl = paramMap['Device.ManagementServer.ConnectionRequestURL']
+      || paramMap['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
+      || '';
 
     if (device) {
       device = await this.prisma.device.update({
