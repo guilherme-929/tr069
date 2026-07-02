@@ -20,6 +20,7 @@ export class CwmpService {
   });
 
   private cachedTenantId: string | null = null;
+  private lastSerial: string | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -39,6 +40,8 @@ export class CwmpService {
     if (!xmlString || !xmlString.trim()) {
       return this.buildEmptySoapEnvelope();
     }
+
+    if (serial) this.lastSerial = serial;
 
     try {
       const parsed = this.parser.parse(xmlString);
@@ -273,10 +276,50 @@ export class CwmpService {
   }
 
   private async handleGetParameterValuesResponse(data: any): Promise<string> {
+    const response = data?.['cwmp:GetParameterValuesResponse'] || data?.GetParameterValuesResponse;
+    const paramList = response?.ParameterList?.ParameterValueStruct || [];
+    const params = Array.isArray(paramList) ? paramList : [paramList];
+
+    const paramMap: Record<string, string> = {};
+    for (const p of params) {
+      if (p.Name) {
+        paramMap[p.Name] = p.Value?.['#text'] ?? p.Value ?? '';
+      }
+    }
+
+    if (Object.keys(paramMap).length === 0 || !this.lastSerial) return this.buildEmptySoapEnvelope();
+
+    const device = await this.prisma.device.findUnique({
+      where: { serial: this.lastSerial },
+    });
+    if (device) {
+      const currentParams = (device.parameters as Record<string, string>) || {};
+      await this.prisma.device.update({
+        where: { id: device.id },
+        data: { parameters: { ...currentParams, ...paramMap } as any },
+      });
+
+      await this.prisma.task.updateMany({
+        where: { deviceId: device.id, type: 'GetParameterValues', status: 'IN_PROGRESS' },
+        data: { status: 'COMPLETED', result: paramMap as any },
+      });
+    }
+
     return this.buildEmptySoapEnvelope();
   }
 
   private async handleSetParameterValuesResponse(data: any): Promise<string> {
+    const response = data?.['cwmp:SetParameterValuesResponse'] || data?.SetParameterValuesResponse;
+    const paramKey = response?.ParameterKey || '';
+    const status = response?.Status ?? 0;
+
+    if (paramKey) {
+      await this.prisma.task.updateMany({
+        where: { id: paramKey },
+        data: { status: status === 0 ? 'COMPLETED' : 'FAILED' },
+      });
+    }
+
     return this.buildEmptySoapEnvelope();
   }
 
@@ -406,6 +449,97 @@ export class CwmpService {
     return this.handleDownload(deviceId, downloadUrl, '1 Firmware Upgrade Image');
   }
 
+  async handleSetWiFiConfig(deviceId: string, params: { ssid: string; password: string }): Promise<any> {
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error('Device not found');
+
+    const wifiParams = [
+      { name: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID', value: params.ssid },
+      { name: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase', value: params.password },
+      { name: 'Device.WiFi.SSID.1.SSID', value: params.ssid },
+      { name: 'Device.WiFi.AccessPoint.1.Security.KeyPassphrase', value: params.password },
+    ];
+
+    const task = await this.prisma.task.create({
+      data: {
+        deviceId,
+        type: 'SetParameterValues',
+        status: 'PENDING',
+        payload: { params: wifiParams },
+        tenantId: device.tenantId,
+      },
+    });
+
+    const currentParams = (device.parameters as Record<string, string>) || {};
+    for (const p of wifiParams) {
+      currentParams[p.name] = p.value;
+    }
+    await this.prisma.device.update({
+      where: { id: deviceId },
+      data: { parameters: currentParams as any },
+    });
+
+    this.ws.broadcast('device:command', { deviceId, command: 'SetWiFi', timestamp: new Date() });
+
+    await this.prisma.log.create({
+      data: {
+        action: 'WIFI_CONFIG',
+        entity: 'DEVICE',
+        entityId: deviceId,
+        detail: `WiFi config queued for ${device.serial}`,
+        tenantId: device.tenantId,
+      },
+    });
+
+    return { task, message: 'WiFi configuration queued. Will be applied on next CPE connection.' };
+  }
+
+  async handleReadWiFiConfig(deviceId: string): Promise<any> {
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error('Device not found');
+
+    const params = (device.parameters as Record<string, string>) || {};
+
+    const wifiPaths = [
+      'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
+      'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase',
+      'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable',
+      'Device.WiFi.SSID.1.SSID',
+      'Device.WiFi.AccessPoint.1.Security.KeyPassphrase',
+    ];
+
+    const existingParams = wifiPaths.reduce((acc, path) => {
+      if (params[path]) acc[path] = params[path];
+      return acc;
+    }, {} as Record<string, string>);
+
+    if (Object.keys(existingParams).length > 0) {
+      return { params: existingParams, source: 'cache' };
+    }
+
+    const task = await this.prisma.task.create({
+      data: {
+        deviceId,
+        type: 'GetParameterValues',
+        status: 'PENDING',
+        payload: { names: wifiPaths },
+        tenantId: device.tenantId,
+      },
+    });
+
+    await this.prisma.log.create({
+      data: {
+        action: 'WIFI_READ',
+        entity: 'DEVICE',
+        entityId: deviceId,
+        detail: `Reading WiFi config from ${device.serial}`,
+        tenantId: device.tenantId,
+      },
+    });
+
+    return { task, message: 'Fetching WiFi parameters from CPE...', source: 'pending' };
+  }
+
   async handleUpload(deviceId: string, fileType: string): Promise<any> {
     return this.buildSoapResponse('UploadResponse', {
       Status: 0,
@@ -437,12 +571,15 @@ export class CwmpService {
           }),
         );
       }
-      case 'GetParameterValues':
+      case 'GetParameterValues': {
+        const payload = task.payload as any;
+        const names = payload?.names || ['Device.DeviceInfo.*'];
         return this.builder.build(
           this.buildSoapResponse('GetParameterValues', {
-            ParameterNames: { string: ['Device.DeviceInfo.*'] },
+            ParameterNames: { string: names },
           }),
         );
+      }
       case 'SetParameterValues':
       case 'Provision': {
         const payload = task.payload as any;

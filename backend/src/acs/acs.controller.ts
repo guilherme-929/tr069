@@ -93,4 +93,23 @@ export class AcsController {
   ) {
     return this.cwmpService.handleSetParameterValues(id, body.params);
   }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Post('api/devices/:id/wifi')
+  setWiFi(
+    @Param('id') id: string,
+    @Body() body: { ssid: string; password: string },
+  ) {
+    return this.cwmpService.handleSetWiFiConfig(id, body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Post('api/devices/:id/wifi/read')
+  readWiFi(@Param('id') id: string) {
+    return this.cwmpService.handleReadWiFiConfig(id);
+  }
 }

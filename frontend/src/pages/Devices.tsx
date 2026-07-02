@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save } from 'lucide-react';
 
-const tabs = ['Overview', 'TR-069 Params', 'Network', 'Logs'] as const;
+const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Logs'] as const;
 type Tab = typeof tabs[number];
 
 export default function Devices() {
@@ -15,6 +15,7 @@ export default function Devices() {
   const [statusFilter, setStatusFilter] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const params: any = { page, limit: 10 };
@@ -451,6 +452,99 @@ export default function Devices() {
                     >
                       <ExternalLink size={14} /> Send Connection Request
                     </button>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {activeTab === 'WiFi' && (
+              <section>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">WiFi Configuration</h4>
+                <div className="space-y-3">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                    <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">SSID & Password</div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">SSID (WiFi Name)</label>
+                        <input
+                          type="text"
+                          id="wifi-ssid"
+                          defaultValue={(() => {
+                            const p = selected.parameters as Record<string, string> || {};
+                            return p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
+                              || p['Device.WiFi.SSID.1.SSID']
+                              || '';
+                          })()}
+                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">WiFi Password</label>
+                        <div className="relative">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            id="wifi-password"
+                            defaultValue={(() => {
+                              const p = selected.parameters as Record<string, string> || {};
+                              return p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
+                                || p['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
+                                || '';
+                            })()}
+                            className="w-full pr-10 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            const ssid = (document.getElementById('wifi-ssid') as HTMLInputElement).value;
+                            const password = (document.getElementById('wifi-password') as HTMLInputElement).value;
+                            if (!ssid || !password) { alert('Fill in both SSID and password'); return; }
+                            try {
+                              const { data } = await api.post(`/devices/${selected.id}/wifi`, { ssid, password });
+                              alert(data.message);
+                              selectDevice(selected.id);
+                            } catch (err: any) {
+                              alert(err.response?.data?.message || 'Failed to save WiFi config');
+                            }
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-opacity"
+                        >
+                          <Save size={13} /> Save & Push to CPE
+                        </button>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { data } = await api.post(`/devices/${selected.id}/wifi/read`);
+                              if (data.source === 'cache' && data.params) {
+                                const ssid = Object.values(data.params).find(v => v.includes('_')) || Object.values(data.params)[0] || '';
+                                const pw = Object.values(data.params).find((_v, i) => i > 0 && i % 2 === 1) || '';
+                                (document.getElementById('wifi-ssid') as HTMLInputElement).value = ssid;
+                                (document.getElementById('wifi-password') as HTMLInputElement).value = pw;
+                                alert('WiFi parameters loaded from cache');
+                              } else {
+                                alert(data.message + ' Refresh the page after the CPE connects.');
+                              }
+                            } catch (err: any) {
+                              alert(err.response?.data?.message || 'Failed to read WiFi config');
+                            }
+                          }}
+                          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
+                        >
+                          <RefreshCw size={13} /> Read from CPE
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>
