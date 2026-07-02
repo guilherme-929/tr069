@@ -51,7 +51,7 @@ export default function Devices() {
   const doProvision = async (deviceId: string) => {
     setActionLoading('provision');
     try {
-      await api.post(`/provisioning/device/${deviceId}`);
+      await api.post(`/provisioning/device/${deviceId}`, {});
     } catch (err: any) {
       alert(err.response?.data?.message || 'Provisioning failed');
     }

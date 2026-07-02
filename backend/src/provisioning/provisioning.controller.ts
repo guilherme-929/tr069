@@ -21,7 +21,7 @@ export class ProvisioningController {
     @CurrentUser('tenantId') tenantId: string,
     @Body() body: any,
   ) {
-    return this.provisioningService.provisionDevice(id, tenantId, body.template);
+    return this.provisioningService.provisionDevice(id, tenantId, body?.template);
   }
 
   @Roles(Role.ADMIN, Role.TECHNICIAN)
