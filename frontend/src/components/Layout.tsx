@@ -16,6 +16,7 @@ import {
   Search,
   Menu,
   X,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -28,6 +29,7 @@ const navItems = [
   { icon: Users, label: 'Clientes', path: '/clients' },
   { icon: Terminal, label: 'Logs', path: '/logs' },
   { icon: Bell, label: 'Alertas', path: '/alerts' },
+  { icon: SettingsIcon, label: 'Configurações', path: '/settings' },
 ];
 
 export default function Layout() {

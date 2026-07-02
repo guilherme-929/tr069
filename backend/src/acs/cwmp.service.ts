@@ -137,6 +137,7 @@ export class CwmpService {
     const firmwareVersion = paramMap['Device.DeviceInfo.SoftwareVersion'] || '';
     const hardwareVersion = paramMap['Device.DeviceInfo.HardwareVersion'] || '';
     const uptime = parseInt(paramMap['Device.DeviceInfo.UpTime'] || '0', 10);
+    const connectionRequestUrl = paramMap['Device.ManagementServer.ConnectionRequestURL'] || '';
 
     if (device) {
       device = await this.prisma.device.update({
@@ -152,6 +153,7 @@ export class CwmpService {
           lastInform: new Date(),
           lastContact: new Date(),
           parameters: paramMap as any,
+          ...(connectionRequestUrl && { connectionRequestUrl }),
         },
       });
     } else {
@@ -174,6 +176,7 @@ export class CwmpService {
             hardwareVersion,
             status: 'ONLINE',
             ipAddress,
+            connectionRequestUrl: connectionRequestUrl || undefined,
             lastInform: new Date(),
             lastContact: new Date(),
             parameters: paramMap as any,

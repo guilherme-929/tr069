@@ -1,5 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
 import * as http from 'http';
+import * as https from 'https';
 import { PrismaService } from '../common/prisma.service';
 import { CwmpService } from './cwmp.service';
 
@@ -232,6 +233,68 @@ export class AcsService implements OnModuleInit {
       return false;
     }
     return true;
+  }
+
+  async getEffectiveAcsUrl(deviceId: string): Promise<string> {
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      include: { tenant: true },
+    });
+    if (!device) throw new HttpException('Device not found', HttpStatus.NOT_FOUND);
+
+    return device.acsPublicUrlOverride
+      || device.tenant.acsPublicUrl
+      || process.env.ACS_PUBLIC_URL
+      || `http://${device.ipAddress || 'localhost'}:${process.env.ACS_PORT || '7547'}`;
+  }
+
+  async sendConnectionRequest(deviceId: string): Promise<{ success: boolean; message: string }> {
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      include: { tenant: true },
+    });
+    if (!device) throw new HttpException('Device not found', HttpStatus.NOT_FOUND);
+
+    if (!device.tenant.connectionRequestEnabled) {
+      throw new HttpException('Connection requests are disabled for this tenant', HttpStatus.FORBIDDEN);
+    }
+
+    const targetUrl = device.connectionRequestUrl;
+    if (!targetUrl) {
+      throw new HttpException(
+        'No ConnectionRequest URL available for this device. The device may not have reported it yet.',
+        HttpStatus.PRECONDITION_FAILED,
+      );
+    }
+
+    return new Promise((resolve, reject) => {
+      const parsedUrl = new URL(targetUrl);
+      const client = parsedUrl.protocol === 'https:' ? https : http;
+
+      const req = client.get(targetUrl, { timeout: 10000 }, (res) => {
+        this.logger.log(`ConnectionRequest to ${targetUrl} responded with ${res.statusCode}`);
+        resolve({
+          success: res.statusCode! < 500,
+          message: `Connection request sent. Response: ${res.statusCode} ${res.statusMessage}`,
+        });
+      });
+
+      req.on('error', (err) => {
+        this.logger.error(`ConnectionRequest to ${targetUrl} failed: ${err.message}`);
+        reject(new HttpException(
+          `Failed to send connection request: ${err.message}`,
+          HttpStatus.SERVICE_UNAVAILABLE,
+        ));
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new HttpException(
+          'Connection request timed out after 10s',
+          HttpStatus.GATEWAY_TIMEOUT,
+        ));
+      });
+    });
   }
 
   async getDashboardStats(tenantId: string) {

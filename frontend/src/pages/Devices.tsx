@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink } from 'lucide-react';
 
 const tabs = ['Overview', 'TR-069 Params', 'Network', 'Logs'] as const;
 type Tab = typeof tabs[number];
@@ -206,7 +206,7 @@ export default function Devices() {
               </div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2">
               <button
                 onClick={() => doAction('reboot', selected.id)}
                 disabled={actionLoading === 'reboot'}
@@ -227,6 +227,20 @@ export default function Devices() {
                 className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
               >
                 <Download size={13} /> {actionLoading === 'update' ? '...' : 'Update'}
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const { data } = await api.post(`/devices/${selected.id}/connection-request`);
+                    alert(data.message);
+                  } catch (err: any) {
+                    alert(err.response?.data?.message || 'Connection request failed');
+                  }
+                }}
+                disabled={!selected.connectionRequestUrl}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-40"
+              >
+                <ExternalLink size={13} /> CR
               </button>
               <button
                 onClick={() => doAction('reset', selected.id)}
@@ -346,12 +360,61 @@ export default function Devices() {
                       <p><span className="text-slate-400">MAC:</span> {selected.mac || '-'}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                    <Terminal size={16} className="text-slate-400" />
-                    <div className="text-xs">
-                      <p className="font-bold text-slate-900 dark:text-white">Connection Request</p>
-                      <p className="text-slate-400 font-mono text-[10px]">http://{selected.ipAddress || '...'}:7547/</p>
+
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-3">
+                    <div className="text-sm font-bold text-slate-900 dark:text-white">Connection Request</div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">ACS Public URL (override)</label>
+                      <input
+                        type="text"
+                        defaultValue={selected.acsPublicUrlOverride || ''}
+                        placeholder="http://acs.mydomain.com:7547"
+                        onBlur={async (e) => {
+                          const val = e.target.value.trim() || undefined;
+                          try {
+                            const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { acsPublicUrlOverride: val });
+                            setSelected((prev: any) => ({ ...prev, acsPublicUrlOverride: data.acsPublicUrlOverride }));
+                          } catch {}
+                        }}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                      />
                     </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Device ConnectionRequest URL</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          defaultValue={selected.connectionRequestUrl || ''}
+                          placeholder="http://192.168.1.1:7547/"
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim() || undefined;
+                            try {
+                              const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestUrl: val });
+                              setSelected((prev: any) => ({ ...prev, connectionRequestUrl: data.connectionRequestUrl }));
+                            } catch {}
+                          }}
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">Reported by CPE or configured manually</p>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        try {
+                          const { data } = await api.post(`/devices/${selected.id}/connection-request`);
+                          alert(data.message);
+                        } catch (err: any) {
+                          alert(err.response?.data?.message || 'Connection request failed');
+                        }
+                      }}
+                      disabled={!selected.connectionRequestUrl}
+                      className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-opacity disabled:opacity-40"
+                    >
+                      <ExternalLink size={14} /> Send Connection Request
+                    </button>
                   </div>
                 </div>
               </section>

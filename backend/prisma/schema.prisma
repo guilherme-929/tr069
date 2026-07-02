@@ -52,11 +52,15 @@ enum AlertType {
 }
 
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  name                   String
+  slug                   String   @unique
+  acsUsername            String   @default("alemnet")
+  acsPassword            String   @default("alemnet")
+  acsPublicUrl           String?
+  connectionRequestEnabled Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   users        User[]
   devices      Device[]
@@ -111,6 +115,8 @@ model Device {
   firmwareId      String?
   tags            String[]
   parameters      Json?
+  connectionRequestUrl   String?
+  acsPublicUrlOverride   String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -140,6 +146,7 @@ model DeviceModel {
   dataModel   String   @default("TR-181")
   description String?
   defaultParameters Json?
+  defaultAcsUrl     String?
   provisioningScript String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Patch, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Delete, Query, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { DevicesService } from './devices.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -36,6 +36,15 @@ export class DevicesController {
   @Patch(':id')
   update(@Param('id') id: string, @Query() data: any) {
     return this.devicesService.update(id, data);
+  }
+
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Patch(':id/acs-config')
+  updateAcsConfig(
+    @Param('id') id: string,
+    @Body() body: { connectionRequestUrl?: string; acsPublicUrlOverride?: string },
+  ) {
+    return this.devicesService.updateAcsConfig(id, body);
   }
 
   @Roles(Role.ADMIN)

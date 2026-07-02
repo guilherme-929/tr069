@@ -9,6 +9,7 @@ import Provisioning from './pages/Provisioning';
 import Clients from './pages/Clients';
 import Logs from './pages/Logs';
 import Alerts from './pages/Alerts';
+import Settings from './pages/Settings';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="clients" element={<Clients />} />
         <Route path="logs" element={<Logs />} />
         <Route path="alerts" element={<Alerts />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
   );

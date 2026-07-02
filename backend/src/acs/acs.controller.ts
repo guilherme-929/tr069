@@ -35,6 +35,14 @@ export class AcsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Post('api/devices/:id/connection-request')
+  connectionRequest(@Param('id') id: string) {
+    return this.acsService.sendConnectionRequest(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
   @Post('api/devices/:id/reboot')
   reboot(@Param('id') id: string) {
     return this.cwmpService.handleReboot(id);

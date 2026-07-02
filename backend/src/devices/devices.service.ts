@@ -69,6 +69,21 @@ export class DevicesService {
     return this.prisma.device.update({ where: { id }, data });
   }
 
+  async updateAcsConfig(
+    id: string,
+    data: { connectionRequestUrl?: string; acsPublicUrlOverride?: string },
+  ) {
+    const device = await this.prisma.device.findUnique({ where: { id } });
+    if (!device) throw new NotFoundException('Device not found');
+    return this.prisma.device.update({
+      where: { id },
+      data: {
+        ...(data.connectionRequestUrl !== undefined && { connectionRequestUrl: data.connectionRequestUrl }),
+        ...(data.acsPublicUrlOverride !== undefined && { acsPublicUrlOverride: data.acsPublicUrlOverride }),
+      },
+    });
+  }
+
   async remove(id: string) {
     const device = await this.prisma.device.findUnique({ where: { id } });
     if (!device) throw new NotFoundException('Device not found');

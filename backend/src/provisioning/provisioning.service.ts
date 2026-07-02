@@ -10,25 +10,36 @@ export class ProvisioningService {
   async provisionDevice(deviceId: string, tenantId: string, template?: any) {
     const device = await this.prisma.device.findUnique({
       where: { id: deviceId },
-      include: { model: true },
+      include: { model: true, tenant: true },
     });
     if (!device) throw new Error('Device not found');
 
     const defaultParams = (device.model?.defaultParameters as Record<string, string>) || {};
+
+    const acsUrl = device.acsPublicUrlOverride
+      || device.tenant.acsPublicUrl
+      || process.env.ACS_PUBLIC_URL
+      || `http://localhost:${process.env.ACS_PORT || '7547'}`;
+
+    const paramsWithCr = {
+      ...defaultParams,
+      'Device.ManagementServer.URL': defaultParams['Device.ManagementServer.URL'] || `${acsUrl}/cwmp`,
+      'Device.ManagementServer.ConnectionRequestURL': acsUrl,
+    };
 
     const task = await this.prisma.task.create({
       data: {
         deviceId,
         type: 'Provision',
         status: 'PENDING',
-        payload: { template, parameters: defaultParams },
+        payload: { template, parameters: paramsWithCr },
         tenantId,
       },
     });
 
     await this.prisma.device.update({
       where: { id: deviceId },
-      data: { status: 'PROVISIONING', parameters: { ...(device.parameters as any), ...defaultParams } },
+      data: { status: 'PROVISIONING', parameters: { ...(device.parameters as any), ...paramsWithCr } },
     });
 
     await this.prisma.log.create({
@@ -36,7 +47,7 @@ export class ProvisioningService {
         action: 'PROVISION',
         entity: 'DEVICE',
         entityId: deviceId,
-        detail: `Provisioning queued for ${device.serial}`,
+        detail: `Provisioning queued for ${device.serial} with ACS URL: ${acsUrl}`,
         tenantId,
       },
     });
