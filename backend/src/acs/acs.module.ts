@@ -10,4 +10,4 @@ import { WebsocketGateway } from '../websocket/websocket.gateway';
   providers: [AcsService, CwmpService, PrismaService, WebsocketGateway],
   exports: [AcsService, CwmpService],
 })
-export class AwsModule {}
+export class AcsModule {}

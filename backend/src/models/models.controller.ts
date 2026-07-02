@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ModelsService } from './models.service';
+import { DiscoveryService } from './discovery.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -12,7 +13,10 @@ import { Role } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('api/models')
 export class ModelsController {
-  constructor(private modelsService: ModelsService) {}
+  constructor(
+    private modelsService: ModelsService,
+    private discoveryService: DiscoveryService,
+  ) {}
 
   @Get()
   findAll(@CurrentUser('tenantId') tenantId: string, @Query() query: any) {
@@ -40,5 +44,17 @@ export class ModelsController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.modelsService.remove(id);
+  }
+
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Post(':id/discover')
+  discover(@Param('id') id: string) {
+    return this.discoveryService.discoverDeviceModel(id);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post(':id/auto-model')
+  autoCreateModel(@Param('id') id: string) {
+    return this.discoveryService.autoCreateModel(id);
   }
 }

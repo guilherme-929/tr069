@@ -3,7 +3,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaService } from './common/prisma.service';
 import { AuthModule } from './auth/auth.module';
-import { AwsModule } from './acs/acs.module';
+import { AcsModule } from './acs/acs.module';
 import { DevicesModule } from './devices/devices.module';
 import { ModelsModule } from './models/models.module';
 import { FirmwareModule } from './firmware/firmware.module';
@@ -19,7 +19,7 @@ import { QueueModule } from './queue/queue.module';
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     AuthModule,
-    AwsModule,
+    AcsModule,
     DevicesModule,
     ModelsModule,
     FirmwareModule,

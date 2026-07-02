@@ -97,6 +97,7 @@ model Device {
   manufacturer    String?
   modelName       String
   firmwareVersion String?
+  hardwareVersion String?
   status          DeviceStatus @default(OFFLINE)
   ipAddress       String?
   wanIp           String?
