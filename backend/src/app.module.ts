@@ -11,6 +11,7 @@ import { ProvisioningModule } from './provisioning/provisioning.module';
 import { ClientsModule } from './clients/clients.module';
 import { LogsModule } from './logs/logs.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { TenantModule } from './tenant/tenant.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { QueueModule } from './queue/queue.module';
 
@@ -27,6 +28,7 @@ import { QueueModule } from './queue/queue.module';
     ClientsModule,
     LogsModule,
     AlertsModule,
+    TenantModule,
     WebsocketModule,
     QueueModule,
   ],
