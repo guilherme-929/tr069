@@ -4,8 +4,18 @@ import { PrismaService } from '../common/prisma.service';
 @Injectable()
 export class DiscoveryService {
   private readonly logger = new Logger(DiscoveryService.name);
+  private cachedTenantId: string | null = null;
 
   constructor(private prisma: PrismaService) {}
+
+  private async resolveTenantId(): Promise<string> {
+    if (this.cachedTenantId) return this.cachedTenantId;
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug: 'default-isp' } })
+      || await this.prisma.tenant.findFirst();
+    if (!tenant) throw new Error('No tenant found');
+    this.cachedTenantId = tenant.id;
+    return tenant.id;
+  }
 
   async discoverDeviceModel(deviceId: string): Promise<any> {
     const device = await this.prisma.device.findUnique({
@@ -76,7 +86,7 @@ export class DiscoveryService {
         dataModel: 'TR-181',
         description: `Auto-discovered from device ${discovery.serialNumber}`,
         defaultParameters: discovery.parameters as any,
-        tenantId: 'default',
+        tenantId: await this.resolveTenantId(),
       },
     });
 

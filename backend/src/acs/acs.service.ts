@@ -17,6 +17,7 @@ export class AcsService implements OnModuleInit {
   private readonly logger = new Logger(AcsService.name);
   private server!: http.Server;
   private sessions = new Map<string, CwmpSession>();
+  private cachedTenantId: string | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -25,6 +26,7 @@ export class AcsService implements OnModuleInit {
 
   onModuleInit() {
     this.startAcsServer();
+    this.resolveTenantId().catch(() => this.logger.warn('Could not pre-cache tenant ID'));
   }
 
   private startAcsServer() {
@@ -143,18 +145,28 @@ export class AcsService implements OnModuleInit {
     res.end(this.cwmp.buildEmptySoapEnvelope());
   }
 
+  private async resolveTenantId(): Promise<string> {
+    if (this.cachedTenantId) return this.cachedTenantId;
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug: 'default-isp' } })
+      || await this.prisma.tenant.findFirst();
+    if (!tenant) throw new Error('No tenant found. Run seed first.');
+    this.cachedTenantId = tenant.id;
+    return tenant.id;
+  }
+
   private updateSessionAfterResponse(serial: string | null, xmlResponse: string) {
     if (!serial) return;
 
     if (xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse')) {
       if (!this.sessions.has(serial)) {
+        const tid = this.cachedTenantId || 'default';
         this.sessions.set(serial, {
           serial,
           deviceId: '',
           state: 'INFORMED',
           pendingTasks: [],
           currentTaskIndex: 0,
-          tenantId: 'default',
+          tenantId: tid,
         });
       }
     }

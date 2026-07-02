@@ -19,10 +19,21 @@ export class CwmpService {
     suppressEmptyNode: true,
   });
 
+  private cachedTenantId: string | null = null;
+
   constructor(
     private prisma: PrismaService,
     private ws: WebsocketGateway,
   ) {}
+
+  private async resolveTenantId(): Promise<string> {
+    if (this.cachedTenantId) return this.cachedTenantId;
+    const tenant = await this.prisma.tenant.findFirst({ where: { slug: 'default-isp' } })
+      || await this.prisma.tenant.findFirst();
+    if (!tenant) throw new Error('No tenant found in database. Run seed first.');
+    this.cachedTenantId = tenant.id;
+    return tenant.id;
+  }
 
   async handleCwmp(xmlString: string, serial?: string, getSession?: () => any): Promise<string> {
     if (!xmlString || !xmlString.trim()) {
@@ -153,21 +164,21 @@ export class CwmpService {
       }
 
       device = await this.prisma.device.create({
-        data: {
-          serial,
-          mac: mac || serial,
-          manufacturer,
-          modelName: modelName || 'Unknown',
-          modelId,
-          firmwareVersion,
-          hardwareVersion,
-          status: 'ONLINE',
-          ipAddress,
-          lastInform: new Date(),
-          lastContact: new Date(),
-          parameters: paramMap as any,
-          tenantId: 'default',
-        },
+          data: {
+            serial,
+            mac: mac || serial,
+            manufacturer,
+            modelName: modelName || 'Unknown',
+            modelId,
+            firmwareVersion,
+            hardwareVersion,
+            status: 'ONLINE',
+            ipAddress,
+            lastInform: new Date(),
+            lastContact: new Date(),
+            parameters: paramMap as any,
+            tenantId: await this.resolveTenantId(),
+          },
       });
     }
 
