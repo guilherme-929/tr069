@@ -56,7 +56,7 @@ export class AcsService implements OnModuleInit {
         }
 
         const contentType = req.headers['content-type'] || '';
-        const isSoap = contentType.includes('text/xml') || contentType.includes('application/soap') || body.includes('<soap:Envelope') || body.includes('<soapenv:Envelope');
+        const isSoap = contentType.includes('text/xml') || contentType.includes('application/soap') || body.includes('<soap:Envelope') || body.includes('<soapenv:Envelope') || body.includes('<SOAP-ENV:Envelope');
 
         if (!body || body.trim().length === 0 || !isSoap) {
           await this.handleCpeReady(serial || '', res);

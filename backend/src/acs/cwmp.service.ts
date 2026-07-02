@@ -42,8 +42,8 @@ export class CwmpService {
 
     try {
       const parsed = this.parser.parse(xmlString);
-      const envelope = parsed['soap:Envelope'] || parsed['soapenv:Envelope'] || parsed['Envelope'];
-      const body = envelope?.['soap:Body'] || envelope?.['soapenv:Body'] || envelope?.['Body'];
+      const envelope = parsed['soap:Envelope'] || parsed['soapenv:Envelope'] || parsed['SOAP-ENV:Envelope'] || parsed['Envelope'];
+      const body = envelope?.['soap:Body'] || envelope?.['soapenv:Body'] || envelope?.['SOAP-ENV:Body'] || envelope?.['Body'];
 
       if (!body) {
         return this.buildFaultResponse('Client', 'No SOAP body found');
