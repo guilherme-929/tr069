@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
-import { TaskStatus } from '@prisma/client';
 
 @Injectable()
 export class ProvisioningService {
@@ -21,7 +20,7 @@ export class ProvisioningService {
       data: {
         deviceId,
         type: 'Provision',
-        status: 'IN_PROGRESS',
+        status: 'PENDING',
         payload: { template, parameters: defaultParams },
         tenantId,
       },
@@ -37,23 +36,14 @@ export class ProvisioningService {
         action: 'PROVISION',
         entity: 'DEVICE',
         entityId: deviceId,
-        detail: `Provisioning started for ${device.serial}`,
+        detail: `Provisioning queued for ${device.serial}`,
         tenantId,
       },
     });
 
-    setTimeout(async () => {
-      await this.prisma.task.update({
-        where: { id: task.id },
-        data: { status: 'COMPLETED' },
-      });
-      await this.prisma.device.update({
-        where: { id: deviceId },
-        data: { status: 'ONLINE' },
-      });
-    }, 5000);
+    this.logger.log(`Provision task ${task.id} queued for device ${device.serial}`);
 
-    return { task, message: 'Provisioning started' };
+    return { task, message: 'Provisioning queued. Will be applied on next CPE connection.' };
   }
 
   async bulkProvision(deviceIds: string[], tenantId: string) {
@@ -61,7 +51,7 @@ export class ProvisioningService {
     for (const id of deviceIds) {
       try {
         const result = await this.provisionDevice(id, tenantId);
-        results.push({ deviceId: id, status: 'started', taskId: result.task.id });
+        results.push({ deviceId: id, status: 'queued', taskId: result.task.id });
       } catch (err: any) {
         results.push({ deviceId: id, status: 'error', error: err.message });
       }

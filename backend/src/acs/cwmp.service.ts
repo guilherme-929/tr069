@@ -377,6 +377,20 @@ export class CwmpService {
     });
   }
 
+  async handleFirmwareUpdate(deviceId: string): Promise<any> {
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      include: { firmware: true, model: { include: { firmwares: { where: { status: 'LATEST' }, take: 1 } } } },
+    });
+    if (!device) throw new Error('Device not found');
+
+    const latestFirmware = device.model?.firmwares?.[0] || device.firmware;
+    if (!latestFirmware) throw new Error('No firmware available for update');
+
+    const downloadUrl = latestFirmware.filePath || `http://acs.local:7567/${latestFirmware.fileName}`;
+    return this.handleDownload(deviceId, downloadUrl, '1 Firmware Upgrade Image');
+  }
+
   async handleUpload(deviceId: string, fileType: string): Promise<any> {
     return this.buildSoapResponse('UploadResponse', {
       Status: 0,
@@ -414,12 +428,17 @@ export class CwmpService {
             ParameterNames: { string: ['Device.DeviceInfo.*'] },
           }),
         );
-      case 'SetParameterValues': {
+      case 'SetParameterValues':
+      case 'Provision': {
         const payload = task.payload as any;
+        const params = payload?.parameters
+          ? Object.entries(payload.parameters as Record<string, string>).map(([name, value]) => ({ name, value }))
+          : (payload?.params || []);
+        if (params.length === 0) return this.buildEmptySoapEnvelope();
         return this.builder.build(
           this.buildSoapResponse('SetParameterValues', {
             ParameterList: {
-              ParameterValueStruct: (payload?.params || []).map((p: any) => ({
+              ParameterValueStruct: params.map((p: any) => ({
                 Name: p.name,
                 Value: { '#text': p.value, '@_xsi:type': 'xsd:string' },
               })),

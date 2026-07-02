@@ -1,26 +1,76 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal } from 'lucide-react';
+
+const tabs = ['Overview', 'TR-069 Params', 'Network', 'Logs'] as const;
+type Tab = typeof tabs[number];
 
 export default function Devices() {
   const [devices, setDevices] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get('/devices', { params: { page, limit: 10, search } }).then(({ data }) => {
+    const params: any = { page, limit: 10 };
+    if (search) params.search = search;
+    if (statusFilter) params.status = statusFilter;
+    api.get('/devices', { params }).then(({ data }) => {
       setDevices(data.data);
       setTotal(data.total);
     }).catch(() => {});
-  }, [page, search]);
+  }, [page, search, statusFilter]);
 
   const selectDevice = async (id: string) => {
     try {
       const { data } = await api.get(`/devices/${id}`);
       setSelected(data);
+      setActiveTab('Overview');
     } catch {}
+  };
+
+  const doAction = async (action: string, deviceId: string) => {
+    setActionLoading(action);
+    try {
+      await api.post(`/devices/${deviceId}/${action}`);
+      if (action === 'reboot' || action === 'reset') {
+        setActionLoading(null);
+        return;
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || `Failed to ${action}`);
+    }
+    setActionLoading(null);
+  };
+
+  const doProvision = async (deviceId: string) => {
+    setActionLoading('provision');
+    try {
+      await api.post(`/provisioning/device/${deviceId}`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Provisioning failed');
+    }
+    setActionLoading(null);
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput);
+    setPage(1);
+  };
+
+  const fmt = (ts: string) => ts ? new Date(ts).toLocaleString() : '-';
+  const uptime = (s: number) => {
+    if (!s) return '-';
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    return `${d}d ${h}h ${m}m`;
   };
 
   return (
@@ -31,42 +81,70 @@ export default function Devices() {
             <h1 className="text-2xl font-black text-slate-900 dark:text-white">Device Management</h1>
             <p className="text-sm text-slate-500 mt-1">Monitor and configure CPE inventory</p>
           </div>
-          <button className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-md">
+          <button
+            onClick={() => window.location.href = '/provisioning'}
+            className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-md"
+          >
             + New Provisioning
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-4">
-          {['Status', 'Model', 'Firmware', 'Tags'].map((filter) => (
-            <div key={filter} className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
-              <label className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">{filter}</label>
-              <select className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 cursor-pointer">
-                <option>All</option>
-                <option>Online</option>
-                <option>Offline</option>
-              </select>
-            </div>
-          ))}
+        <div className="grid grid-cols-5 gap-4">
+          <form onSubmit={handleSearch} className="col-span-2 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search serial, MAC, model..."
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+            />
+          </form>
+          <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+            <label className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">Status</label>
+            <select
+              value={statusFilter}
+              onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+              className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 cursor-pointer outline-none"
+            >
+              <option value="">All</option>
+              <option value="ONLINE">Online</option>
+              <option value="OFFLINE">Offline</option>
+              <option value="PROVISIONING">Provisioning</option>
+              <option value="ERROR">Error</option>
+              <option value="CRITICAL">Critical</option>
+            </select>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+            <label className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">Model</label>
+            <select disabled className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 cursor-pointer outline-none text-slate-400">
+              <option>All</option>
+            </select>
+          </div>
+          <div className="bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200 dark:border-slate-800">
+            <label className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-1">Firmware</label>
+            <select disabled className="w-full bg-transparent border-none text-sm font-semibold focus:ring-0 cursor-pointer outline-none text-slate-400">
+              <option>All</option>
+            </select>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex-1 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[calc(100vh-320px)]">
             <table className="w-full text-left">
               <thead className="sticky top-0 bg-white dark:bg-slate-900 z-10">
                 <tr className="border-b border-slate-100 dark:border-slate-800">
-                  {['Serial', 'MAC', 'Model', 'Firmware', 'Signal', 'Status', 'Last Contact'].map((h) => (
+                  {['Serial', 'MAC', 'Model', 'Firmware', 'Signal', 'Status', 'Last Contact'].map(h => (
                     <th key={h} className="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
-                {devices.map((d: any) => (
+                {devices.map(d => (
                   <tr
                     key={d.id}
                     onClick={() => selectDevice(d.id)}
-                    className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${
-                      selected?.id === d.id ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''
-                    }`}
+                    className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${selected?.id === d.id ? 'bg-blue-50/30 dark:bg-blue-950/20' : ''}`}
                   >
                     <td className="px-4 py-3 text-sm font-mono font-bold text-slate-900 dark:text-white">{d.serial}</td>
                     <td className="px-4 py-3 text-sm font-mono text-slate-500">{d.mac}</td>
@@ -74,8 +152,8 @@ export default function Devices() {
                     <td className="px-4 py-3 text-sm text-slate-500">{d.firmwareVersion || '-'}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-end gap-0.5 h-4">
-                        {[1, 2, 3, 4].map((s) => (
-                          <div key={s} className={`w-1 ${s <= 3 ? `h-${s}` : 'h-3'} ${d.status === 'ONLINE' ? 'bg-success' : 'bg-slate-200'} rounded-full`} style={{ height: `${s * 5 + 2}px` }}></div>
+                        {[1, 2, 3, 4].map(s => (
+                          <div key={s} className={`w-1 rounded-full ${d.status === 'ONLINE' ? 'bg-success' : 'bg-slate-200'}`} style={{ height: `${s * 5 + 2}px` }} />
                         ))}
                       </div>
                     </td>
@@ -89,13 +167,11 @@ export default function Devices() {
                           d.status === 'ONLINE' ? 'bg-success' :
                           d.status === 'OFFLINE' ? 'bg-slate-300' :
                           d.status === 'CRITICAL' ? 'bg-danger' : 'bg-warning'
-                        }`}></span>
+                        }`} />
                         {d.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-400">
-                      {d.lastContact ? new Date(d.lastContact).toLocaleString() : '-'}
-                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-400">{fmt(d.lastContact)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -104,15 +180,15 @@ export default function Devices() {
           <div className="border-t border-slate-100 dark:border-slate-800 p-4 flex items-center justify-between">
             <span className="text-sm text-slate-500">Showing {devices.length} of {total}</span>
             <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-1 border border-slate-200 rounded text-sm hover:bg-slate-50">Prev</button>
-              <button onClick={() => setPage(p => p + 1)} className="px-3 py-1 border border-slate-200 rounded text-sm hover:bg-slate-50">Next</button>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 border border-slate-200 rounded text-sm hover:bg-slate-50 disabled:opacity-40">Prev</button>
+              <button onClick={() => setPage(p => p + 1)} disabled={devices.length < 10} className="px-3 py-1 border border-slate-200 rounded text-sm hover:bg-slate-50 disabled:opacity-40">Next</button>
             </div>
           </div>
         </div>
       </div>
 
       {selected && (
-        <div className="w-[400px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg overflow-hidden flex flex-col">
+        <div className="w-[420px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg overflow-hidden flex flex-col">
           <div className="p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-3">
@@ -122,7 +198,7 @@ export default function Devices() {
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">{selected.serial}</h3>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-success uppercase">{selected.status}</span>
+                    <span className={`text-xs font-bold uppercase ${selected.status === 'ONLINE' ? 'text-success' : 'text-slate-400'}`}>{selected.status}</span>
                     <span className="text-xs text-slate-400">|</span>
                     <span className="text-xs text-slate-500">{selected.modelName}</span>
                   </div>
@@ -130,73 +206,174 @@ export default function Devices() {
               </div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { icon: Power, label: 'Reboot', color: 'bg-slate-900 text-white' },
-                { icon: RefreshCw, label: 'Provision', color: 'border border-slate-200' },
-                { icon: Download, label: 'Update', color: 'border border-slate-200' },
-                { icon: Settings, label: 'Reset', color: 'border border-danger/20 text-danger' },
-              ].map((btn) => (
-                <button key={btn.label} className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold hover:opacity-90 transition-colors ${btn.color}`}>
-                  <btn.icon size={14} /> {btn.label}
-                </button>
-              ))}
+            <div className="grid grid-cols-4 gap-2">
+              <button
+                onClick={() => doAction('reboot', selected.id)}
+                disabled={actionLoading === 'reboot'}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white hover:opacity-90 transition-colors disabled:opacity-40"
+              >
+                <Power size={13} /> {actionLoading === 'reboot' ? '...' : 'Reboot'}
+              </button>
+              <button
+                onClick={() => doProvision(selected.id)}
+                disabled={actionLoading === 'provision'}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
+              >
+                <RefreshCw size={13} /> {actionLoading === 'provision' ? '...' : 'Provision'}
+              </button>
+              <button
+                onClick={() => doAction('update', selected.id)}
+                disabled={actionLoading === 'update'}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
+              >
+                <Download size={13} /> {actionLoading === 'update' ? '...' : 'Update'}
+              </button>
+              <button
+                onClick={() => doAction('reset', selected.id)}
+                disabled={actionLoading === 'reset'}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-danger/20 text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
+              >
+                <Settings size={13} /> {actionLoading === 'reset' ? '...' : 'Reset'}
+              </button>
             </div>
           </div>
 
           <div className="flex border-b border-slate-100 dark:border-slate-800 px-4">
-            {['Overview', 'TR-069 Params', 'Network', 'Logs'].map((tab) => (
-              <button key={tab} className={`px-4 py-3 text-[11px] font-bold uppercase border-b-2 ${
-                tab === 'Overview' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'
-              }`}>{tab}</button>
+            {tabs.map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-4 py-3 text-[11px] font-bold uppercase border-b-2 transition-colors ${
+                  tab === activeTab ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {tab}
+              </button>
             ))}
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
-            <section>
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">System Information</h4>
-              <div className="space-y-3">
-                {[
-                  { label: 'Uptime', value: '4 days, 12h 44m' },
-                  { label: 'MAC Address', value: selected.mac },
-                  { label: 'IP Address', value: selected.ipAddress },
-                  { label: 'Firmware', value: selected.firmwareVersion || '-' },
-                  { label: 'Last Contact', value: selected.lastContact ? new Date(selected.lastContact).toLocaleString() : '-' },
-                ].map((field) => (
-                  <div key={field.label} className="flex justify-between items-center py-1 border-b border-slate-50 dark:border-slate-800/50">
-                    <span className="text-sm text-slate-500">{field.label}</span>
-                    <span className="text-sm font-semibold text-slate-900 dark:text-white">{field.value}</span>
+            {activeTab === 'Overview' && (
+              <>
+                <section>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">System Information</h4>
+                  <div className="space-y-3">
+                    {[
+                      { label: 'Uptime', value: uptime(selected.uptime) },
+                      { label: 'MAC Address', value: selected.mac },
+                      { label: 'IP Address', value: selected.ipAddress || '-' },
+                      { label: 'WAN IP', value: selected.wanIp || '-' },
+                      { label: 'Firmware', value: selected.firmwareVersion || '-' },
+                      { label: 'Hardware', value: selected.model?.hwVersion || '-' },
+                      { label: 'Client', value: selected.client?.name || '-' },
+                      { label: 'Plan', value: selected.client?.plan || '-' },
+                      { label: 'Last Contact', value: fmt(selected.lastContact) },
+                      { label: 'Last Inform', value: fmt(selected.lastInform) },
+                    ].map(f => (
+                      <div key={f.label} className="flex justify-between items-center py-1 border-b border-slate-50 dark:border-slate-800/50">
+                        <span className="text-sm text-slate-500">{f.label}</span>
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">{f.value}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </section>
+                </section>
 
-            {selected.parameters && (
+                {selected.events?.length > 0 && (
+                  <section>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Events</h4>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {selected.events.slice(0, 10).map((ev: any) => (
+                        <div key={ev.id} className="flex gap-3">
+                          <div className="w-2 h-2 mt-1.5 bg-success rounded-full flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{ev.code}</p>
+                            <p className="text-xs text-slate-400">{fmt(ev.createdAt)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {selected.tasks?.length > 0 && (
+                  <section>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Tasks</h4>
+                    <div className="space-y-2">
+                      {selected.tasks.slice(0, 5).map((t: any) => (
+                        <div key={t.id} className="flex items-center gap-2 text-sm">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            t.status === 'COMPLETED' ? 'bg-success/10 text-success' :
+                            t.status === 'FAILED' ? 'bg-danger/10 text-danger' :
+                            t.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-slate-500'
+                          }`}>{t.status}</span>
+                          <span className="text-slate-900 dark:text-white font-semibold">{t.type}</span>
+                          <span className="text-slate-400 ml-auto text-xs">{fmt(t.createdAt)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+
+            {activeTab === 'TR-069 Params' && (
               <section>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">TR-069 Parameters</h4>
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs space-y-1 max-h-40 overflow-y-auto">
-                  {Object.entries(selected.parameters as Record<string, string>).slice(0, 10).map(([key, val]) => (
-                    <p key={key} className="text-slate-600 dark:text-slate-400">
-                      <span className="text-primary">{key}</span> = {val}
-                    </p>
-                  ))}
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Device Parameters</h4>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-[500px] overflow-y-auto space-y-1">
+                  {selected.parameters && Object.entries(selected.parameters as Record<string, string>).length > 0
+                    ? Object.entries(selected.parameters as Record<string, string>).map(([key, val]) => (
+                        <p key={key} className="text-slate-600 dark:text-slate-400 break-all">
+                          <span className="text-primary">{key}</span>
+                          <span className="text-slate-300"> = </span>
+                          <span className="text-slate-900 dark:text-white">{val}</span>
+                        </p>
+                      ))
+                    : <p className="text-slate-400 italic">No parameters available</p>
+                  }
                 </div>
               </section>
             )}
 
-            {selected.events && selected.events.length > 0 && (
+            {activeTab === 'Network' && (
               <section>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Events</h4>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Network Interfaces</h4>
                 <div className="space-y-3">
-                  {selected.events.slice(0, 5).map((ev: any) => (
-                    <div key={ev.id} className="flex gap-3">
-                      <div className="w-2 h-2 mt-1.5 bg-success rounded-full"></div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white">{ev.code}</p>
-                        <p className="text-xs text-slate-400">{new Date(ev.createdAt).toLocaleString()}</p>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                    <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">Connection Info</div>
+                    <div className="space-y-1 text-xs text-slate-600 dark:text-slate-400">
+                      <p><span className="text-slate-400">IPv4:</span> {selected.ipAddress || '-'}</p>
+                      <p><span className="text-slate-400">WAN:</span> {selected.wanIp || '-'}</p>
+                      <p><span className="text-slate-400">MAC:</span> {selected.mac || '-'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                    <Terminal size={16} className="text-slate-400" />
+                    <div className="text-xs">
+                      <p className="font-bold text-slate-900 dark:text-white">Connection Request</p>
+                      <p className="text-slate-400 font-mono text-[10px]">http://{selected.ipAddress || '...'}:7547/</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {activeTab === 'Logs' && (
+              <section>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Activity Log</h4>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {selected.events?.slice(0, 20).map((ev: any) => (
+                    <div key={ev.id} className="flex items-start gap-3 text-sm">
+                      <div className="w-1.5 h-1.5 mt-1.5 bg-primary rounded-full flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-white">{ev.code}</p>
+                        {ev.message && <p className="text-xs text-slate-500 truncate">{ev.message}</p>}
+                        <p className="text-[10px] text-slate-400">{fmt(ev.createdAt)}</p>
                       </div>
                     </div>
                   ))}
+                  {(!selected.events || selected.events.length === 0) && (
+                    <p className="text-sm text-slate-400 italic">No logs recorded yet</p>
+                  )}
                 </div>
               </section>
             )}
@@ -209,7 +386,7 @@ export default function Devices() {
             </div>
             <div className="font-mono text-[11px] text-slate-300 bg-slate-950 p-3 rounded border border-slate-800">
               <p className="text-success">$ get_params "Device.ManagementServer.URL"</p>
-              <p className="mt-1 text-slate-400">&gt;&gt; http://acs.cloud-net.infra/api/cwmp</p>
+              <p className="mt-1 text-slate-400">&gt;&gt; http://acs.local:7547/cwmp</p>
               <p className="mt-2 text-success animate-pulse">_</p>
             </div>
           </div>

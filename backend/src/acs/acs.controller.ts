@@ -51,6 +51,14 @@ export class AcsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Post('api/devices/:id/update')
+  async updateFirmware(@Param('id') id: string) {
+    return this.cwmpService.handleFirmwareUpdate(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
   @Post('api/devices/:id/download')
   download(
     @Param('id') id: string,
