@@ -320,12 +320,12 @@ export default function Devices() {
               <section>
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Device Parameters</h4>
                 <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-[500px] overflow-y-auto space-y-1">
-                  {selected.parameters && Object.entries(selected.parameters as Record<string, string>).length > 0
+                  {selected.parameters && typeof selected.parameters === 'object' && !Array.isArray(selected.parameters) && Object.keys(selected.parameters).length > 0
                     ? Object.entries(selected.parameters as Record<string, string>).map(([key, val]) => (
                         <p key={key} className="text-slate-600 dark:text-slate-400 break-all">
                           <span className="text-primary">{key}</span>
                           <span className="text-slate-300"> = </span>
-                          <span className="text-slate-900 dark:text-white">{val}</span>
+                          <span className="text-slate-900 dark:text-white">{String(val)}</span>
                         </p>
                       ))
                     : <p className="text-slate-400 italic">No parameters available</p>
@@ -361,19 +361,19 @@ export default function Devices() {
               <section>
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Activity Log</h4>
                 <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                  {selected.events?.slice(0, 20).map((ev: any) => (
-                    <div key={ev.id} className="flex items-start gap-3 text-sm">
-                      <div className="w-1.5 h-1.5 mt-1.5 bg-primary rounded-full flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-semibold text-slate-900 dark:text-white">{ev.code}</p>
-                        {ev.message && <p className="text-xs text-slate-500 truncate">{ev.message}</p>}
-                        <p className="text-[10px] text-slate-400">{fmt(ev.createdAt)}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {(!selected.events || selected.events.length === 0) && (
-                    <p className="text-sm text-slate-400 italic">No logs recorded yet</p>
-                  )}
+                  {selected.events && selected.events.length > 0
+                    ? selected.events.slice(0, 20).map((ev: any) => (
+                        <div key={ev.id} className="flex items-start gap-3 text-sm">
+                          <div className="w-1.5 h-1.5 mt-1.5 bg-primary rounded-full flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900 dark:text-white">{ev.code}</p>
+                            {ev.message && <p className="text-xs text-slate-500 truncate">{ev.message}</p>}
+                            <p className="text-[10px] text-slate-400">{fmt(ev.createdAt)}</p>
+                          </div>
+                        </div>
+                      ))
+                    : <p className="text-sm text-slate-400 italic">No logs recorded yet</p>
+                  }
                 </div>
               </section>
             )}
