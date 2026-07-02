@@ -267,11 +267,26 @@ export class AcsService implements OnModuleInit {
       );
     }
 
+    const username = device.connectionRequestUsername || device.serial;
+    const password = device.connectionRequestPassword || device.serial;
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+
     return new Promise((resolve, reject) => {
       const parsedUrl = new URL(targetUrl);
       const client = parsedUrl.protocol === 'https:' ? https : http;
 
-      const req = client.get(targetUrl, { timeout: 10000 }, (res) => {
+      const options = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'GET',
+        timeout: 10000,
+        headers: {
+          'Authorization': `Basic ${auth}`,
+        },
+      };
+
+      const req = client.request(options, (res) => {
         this.logger.log(`ConnectionRequest to ${targetUrl} responded with ${res.statusCode}`);
         resolve({
           success: res.statusCode! < 500,
@@ -294,6 +309,8 @@ export class AcsService implements OnModuleInit {
           HttpStatus.GATEWAY_TIMEOUT,
         ));
       });
+
+      req.end();
     });
   }
 

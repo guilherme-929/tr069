@@ -42,7 +42,12 @@ export class DevicesController {
   @Patch(':id/acs-config')
   updateAcsConfig(
     @Param('id') id: string,
-    @Body() body: { connectionRequestUrl?: string; acsPublicUrlOverride?: string },
+    @Body() body: {
+      connectionRequestUrl?: string;
+      connectionRequestUsername?: string;
+      connectionRequestPassword?: string;
+      acsPublicUrlOverride?: string;
+    },
   ) {
     return this.devicesService.updateAcsConfig(id, body);
   }

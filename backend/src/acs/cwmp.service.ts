@@ -147,8 +147,8 @@ export class CwmpService {
     const uptime = parseInt(
       paramMap['Device.DeviceInfo.UpTime'] || paramMap['InternetGatewayDevice.DeviceInfo.UpTime'] || '0', 10
     );
-    const connectionRequestUrl = paramMap['Device.ManagementServer.ConnectionRequestURL']
-      || paramMap['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
+    const connectionRequestUrl = paramMap['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
+      || paramMap['Device.ManagementServer.ConnectionRequestURL']
       || '';
 
     if (device) {

@@ -71,7 +71,12 @@ export class DevicesService {
 
   async updateAcsConfig(
     id: string,
-    data: { connectionRequestUrl?: string; acsPublicUrlOverride?: string },
+    data: {
+      connectionRequestUrl?: string;
+      connectionRequestUsername?: string;
+      connectionRequestPassword?: string;
+      acsPublicUrlOverride?: string;
+    },
   ) {
     const device = await this.prisma.device.findUnique({ where: { id } });
     if (!device) throw new NotFoundException('Device not found');
@@ -79,6 +84,8 @@ export class DevicesService {
       where: { id },
       data: {
         ...(data.connectionRequestUrl !== undefined && { connectionRequestUrl: data.connectionRequestUrl }),
+        ...(data.connectionRequestUsername !== undefined && { connectionRequestUsername: data.connectionRequestUsername }),
+        ...(data.connectionRequestPassword !== undefined && { connectionRequestPassword: data.connectionRequestPassword }),
         ...(data.acsPublicUrlOverride !== undefined && { acsPublicUrlOverride: data.acsPublicUrlOverride }),
       },
     });

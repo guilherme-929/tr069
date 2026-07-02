@@ -401,6 +401,42 @@ export default function Devices() {
                       <p className="text-[10px] text-slate-400 mt-1">Reported by CPE or configured manually</p>
                     </div>
 
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Connection Request Username</label>
+                      <input
+                        type="text"
+                        defaultValue={selected.connectionRequestUsername || ''}
+                        placeholder={selected.serial || 'serial'}
+                        onBlur={async (e) => {
+                          const val = e.target.value.trim() || undefined;
+                          try {
+                            const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestUsername: val });
+                            setSelected((prev: any) => ({ ...prev, connectionRequestUsername: data.connectionRequestUsername }));
+                          } catch {}
+                        }}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Default: device serial</p>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Connection Request Password</label>
+                      <input
+                        type="password"
+                        defaultValue={selected.connectionRequestPassword || ''}
+                        placeholder={selected.serial || 'serial'}
+                        onBlur={async (e) => {
+                          const val = e.target.value.trim() || undefined;
+                          try {
+                            const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestPassword: val });
+                            setSelected((prev: any) => ({ ...prev, connectionRequestPassword: data.connectionRequestPassword }));
+                          } catch {}
+                        }}
+                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Default: device serial</p>
+                    </div>
+
                     <button
                       onClick={async () => {
                         try {
