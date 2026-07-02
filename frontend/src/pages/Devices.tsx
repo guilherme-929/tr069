@@ -386,7 +386,7 @@ export default function Devices() {
             </div>
             <div className="font-mono text-[11px] text-slate-300 bg-slate-950 p-3 rounded border border-slate-800">
               <p className="text-success">$ get_params "Device.ManagementServer.URL"</p>
-              <p className="mt-1 text-slate-400">&gt;&gt; http://acs.local:7547/cwmp</p>
+              <p className="mt-1 text-slate-400">&gt;&gt; http://{window.location.hostname}:7547/cwmp</p>
               <p className="mt-2 text-success animate-pulse">_</p>
             </div>
           </div>

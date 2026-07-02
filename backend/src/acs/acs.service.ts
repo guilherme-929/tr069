@@ -45,15 +45,13 @@ export class AcsService implements OnModuleInit {
   }
 
   private async handleCwmpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (!this.validateAuth(req, res)) return;
+
     let body = '';
     req.on('data', (chunk) => (body += chunk));
     req.on('end', async () => {
       try {
         const serial = this.resolveDeviceSerial(req, body);
-
-        if (!serial) {
-          if (!this.validateAuth(req, res)) return;
-        }
 
         const contentType = req.headers['content-type'] || '';
         const isSoap = contentType.includes('text/xml') || contentType.includes('application/soap') || body.includes('<soap:Envelope') || body.includes('<soapenv:Envelope') || body.includes('<SOAP-ENV:Envelope');
@@ -80,6 +78,13 @@ export class AcsService implements OnModuleInit {
   }
 
   private resolveDeviceSerial(req: http.IncomingMessage, body: string): string | null {
+    try {
+      if (body.includes('<Inform>') || body.includes('<cwmp:Inform>') || body.includes('<SOAP-ENV:Body')) {
+        const serialMatch = body.match(/<SerialNumber>([^<]+)<\/SerialNumber>/);
+        if (serialMatch) return serialMatch[1];
+      }
+    } catch {}
+
     const authHeader = req.headers['authorization'];
     if (authHeader && authHeader.startsWith('Basic ')) {
       const base64 = authHeader.slice(6);
@@ -87,13 +92,6 @@ export class AcsService implements OnModuleInit {
       const colonIndex = decoded.indexOf(':');
       if (colonIndex > 0) return decoded.slice(0, colonIndex);
     }
-
-    try {
-      if (body.includes('<Inform>') || body.includes('<cwmp:Inform>')) {
-        const serialMatch = body.match(/<SerialNumber>([^<]+)<\/SerialNumber>/);
-        if (serialMatch) return serialMatch[1];
-      }
-    } catch {}
 
     return null;
   }
