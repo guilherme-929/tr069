@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2 } from 'lucide-react';
 
 const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Logs'] as const;
 type Tab = typeof tabs[number];
@@ -26,6 +26,26 @@ export default function Devices() {
       setTotal(data.total);
     }).catch(() => {});
   }, [page, search, statusFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'WiFi' && selected) {
+      const hasWifiParams = selected.parameters?.['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
+        || selected.parameters?.['Device.WiFi.SSID.1.SSID'];
+      if (!hasWifiParams) {
+        (async () => {
+          try {
+            const { data } = await api.post(`/devices/${selected.id}/wifi/read`);
+            if (data.source === 'cache' && data.params) {
+              setSelected((prev: any) => ({
+                ...prev,
+                parameters: { ...prev.parameters, ...data.params },
+              }));
+            }
+          } catch {}
+        })();
+      }
+    }
+  }, [activeTab, selected?.id]);
 
   const selectDevice = async (id: string) => {
     try {
@@ -55,6 +75,20 @@ export default function Devices() {
       await api.post(`/provisioning/device/${deviceId}`, {});
     } catch (err: any) {
       alert(err.response?.data?.message || 'Provisioning failed');
+    }
+    setActionLoading(null);
+  };
+
+  const deleteDevice = async (deviceId: string) => {
+    if (!confirm('Are you sure you want to delete this device? This action cannot be undone.')) return;
+    setActionLoading('delete');
+    try {
+      await api.delete(`/devices/${deviceId}`);
+      setSelected(null);
+      setDevices(devices.filter(d => d.id !== deviceId));
+      setTotal(total - 1);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to delete device');
     }
     setActionLoading(null);
   };
@@ -249,6 +283,13 @@ export default function Devices() {
                 className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-danger/20 text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
               >
                 <Settings size={13} /> {actionLoading === 'reset' ? '...' : 'Reset'}
+              </button>
+              <button
+                onClick={() => deleteDevice(selected.id)}
+                disabled={actionLoading === 'delete'}
+                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-danger text-white hover:opacity-90 transition-colors disabled:opacity-40"
+              >
+                <Trash2 size={13} /> {actionLoading === 'delete' ? '...' : 'Delete'}
               </button>
             </div>
           </div>

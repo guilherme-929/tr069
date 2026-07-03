@@ -13,13 +13,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // WiFi Config state
-  const [ssid, setSsid] = useState('');
-  const [wifiPassword, setWifiPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [savingWifi, setSavingWifi] = useState(false);
-  const [wifiMessage, setWifiMessage] = useState('');
-
   // Scripts state
   const [scripts, setScripts] = useState<Script[]>([]);
   const [newScriptName, setNewScriptName] = useState('');
@@ -31,10 +24,6 @@ export default function Settings() {
     api.get('/tenant/settings').then(({ data }) => {
       setAcsPublicUrl(data.acsPublicUrl || '');
       setConnectionRequestEnabled(data.connectionRequestEnabled ?? true);
-      // Load WiFi config
-      const wifiConfig = data.defaultWiFiConfig || {};
-      setSsid(wifiConfig.ssid || '');
-      setWifiPassword(wifiConfig.password || '');
       // Load scripts
       setScripts(data.defaultScripts || []);
     }).catch(() => {});
@@ -50,18 +39,6 @@ export default function Settings() {
       setMessage(err.response?.data?.message || 'Failed to save settings');
     }
     setSaving(false);
-  };
-
-  const saveWifi = async () => {
-    setSavingWifi(true);
-    setWifiMessage('');
-    try {
-      await api.patch('/tenant/wifi-config', { ssid, password: wifiPassword });
-      setWifiMessage('WiFi configuration saved successfully');
-    } catch (err: any) {
-      setWifiMessage(err.response?.data?.message || 'Failed to save WiFi config');
-    }
-    setSavingWifi(false);
   };
 
   const saveScripts = async () => {
@@ -156,71 +133,6 @@ export default function Settings() {
             {message && (
               <span className={`text-sm font-medium ${message.includes('success') ? 'text-success' : 'text-danger'}`}>
                 {message}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* WiFi Configuration Section */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
-              <Wifi size={20} className="text-blue-500" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">Default WiFi Configuration</h3>
-              <p className="text-xs text-slate-500">Default SSID and password applied to all new devices during provisioning</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Default SSID
-              </label>
-              <input
-                type="text"
-                value={ssid}
-                onChange={e => setSsid(e.target.value)}
-                placeholder="MyWiFiNetwork"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Default WiFi Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={wifiPassword}
-                  onChange={e => setWifiPassword(e.target.value)}
-                  placeholder="********"
-                  className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? '🙈' : '👁'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 flex items-center gap-3">
-            <button
-              onClick={saveWifi}
-              disabled={savingWifi}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-40"
-            >
-              <Save size={16} /> {savingWifi ? 'Saving...' : 'Save WiFi Config'}
-            </button>
-            {wifiMessage && (
-              <span className={`text-sm font-medium ${wifiMessage.includes('success') ? 'text-success' : 'text-danger'}`}>
-                {wifiMessage}
               </span>
             )}
           </div>
