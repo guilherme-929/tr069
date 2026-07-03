@@ -34,7 +34,9 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no root@${{ secrets.REMOTE_HOST }} << 'EOF'
             cd /root/tr069 || exit 1
-            docker compose up -d
+            docker compose build --no-cache
+            docker compose up -d --force-recreate
             docker compose exec -T backend npx prisma db push
             docker compose exec -T backend npx prisma db seed
+            docker image prune -f
           EOF
