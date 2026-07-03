@@ -53,17 +53,45 @@ export class AcsService implements OnModuleInit {
     req.on('end', async () => {
       try {
         const serial = this.resolveDeviceSerial(req, body);
+        const bodyLen = (body || '').length;
 
         const contentType = req.headers['content-type'] || '';
         const isSoap = contentType.includes('text/xml') || contentType.includes('application/soap') || body.includes('<soap:Envelope') || body.includes('<soapenv:Envelope') || body.includes('<SOAP-ENV:Envelope');
+
+        this.logger.log(`CWMP req from ${serial || 'unknown'}: method=${req.method}, content-type=${contentType}, bodyLen=${bodyLen}, isSoap=${isSoap}`);
 
         if (!body || body.trim().length === 0 || !isSoap) {
           await this.handleCpeReady(serial || '', res);
           return;
         }
 
+        const existingSession = serial ? this.sessions.get(serial) : undefined;
+        const hasReadyTasks = existingSession && existingSession.state === 'READY' && existingSession.currentTaskIndex < existingSession.pendingTasks.length;
+
+        if (hasReadyTasks) {
+          this.logger.log(`Device ${serial} has ready tasks, sending command instead of processing new request`);
+          const task = existingSession!.pendingTasks[existingSession!.currentTaskIndex];
+          const commandXml = await this.cwmp.buildCwmpCommand(task, existingSession!.deviceId);
+          existingSession!.state = 'SENDING';
+          await this.prisma.task.update({
+            where: { id: task.id },
+            data: { status: 'IN_PROGRESS' },
+          });
+          res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
+          res.end(commandXml);
+          return;
+        }
+
         const xmlResponse = await this.cwmp.handleCwmp(body, serial || undefined);
         this.updateSessionAfterResponse(serial, xmlResponse);
+
+        if (xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse')) {
+          const infoSerial = serial || '';
+          const session = this.sessions.get(infoSerial);
+          if (session && session.pendingTasks && session.pendingTasks.length > 0) {
+            this.logger.log(`Device ${infoSerial} has ${session.pendingTasks.length} pending tasks after Inform`);
+          }
+        }
 
         res.writeHead(200, {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -105,7 +133,7 @@ export class AcsService implements OnModuleInit {
     }
 
     let session = this.sessions.get(serial);
-    if (!session || session.state === 'INFORMED') {
+    if (!session || session.state === 'INFORMED' || session.pendingTasks.length === 0) {
       const device = (session?.deviceId)
         ? await this.prisma.device.findUnique({ where: { id: session.deviceId } })
         : await this.prisma.device.findUnique({ where: { serial } });
@@ -167,6 +195,11 @@ export class AcsService implements OnModuleInit {
           currentTaskIndex: 0,
           tenantId: tid,
         });
+      } else {
+        const session = this.sessions.get(serial)!;
+        if (session.pendingTasks.length === 0) {
+          session.state = 'INFORMED';
+        }
       }
     }
 

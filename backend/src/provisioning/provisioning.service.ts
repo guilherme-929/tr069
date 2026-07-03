@@ -25,6 +25,8 @@ export class ProvisioningService {
       ...defaultParams,
       'Device.ManagementServer.URL': defaultParams['Device.ManagementServer.URL'] || `${acsUrl}/cwmp`,
       'Device.ManagementServer.ConnectionRequestURL': acsUrl,
+      'Device.ManagementServer.PeriodicInformInterval': defaultParams['Device.ManagementServer.PeriodicInformInterval'] || '60',
+      'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': defaultParams['InternetGatewayDevice.ManagementServer.PeriodicInformInterval'] || '60',
     };
 
     const wifiConfig = (device.tenant.defaultWiFiConfig as Record<string, string>) || {};

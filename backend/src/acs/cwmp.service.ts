@@ -254,6 +254,10 @@ export class CwmpService {
       where: { deviceId: device.id, status: 'PENDING' },
     });
 
+    if (pendingCount > 0) {
+      this.logger.log(`Device ${serial} has ${pendingCount} pending tasks after Inform`);
+    }
+
     return this.buildInformResponse(device, pendingCount > 0);
   }
 
