@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2 } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio } from 'lucide-react';
 
 const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Logs'] as const;
 type Tab = typeof tabs[number];
@@ -241,56 +241,94 @@ export default function Devices() {
               </div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
-            <div className="grid grid-cols-5 gap-2">
-              <button
-                onClick={() => doAction('reboot', selected.id)}
-                disabled={actionLoading === 'reboot'}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white hover:opacity-90 transition-colors disabled:opacity-40"
-              >
-                <Power size={13} /> {actionLoading === 'reboot' ? '...' : 'Reboot'}
-              </button>
-              <button
-                onClick={() => doProvision(selected.id)}
-                disabled={actionLoading === 'provision'}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
-              >
-                <RefreshCw size={13} /> {actionLoading === 'provision' ? '...' : 'Provision'}
-              </button>
-              <button
-                onClick={() => doAction('update', selected.id)}
-                disabled={actionLoading === 'update'}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
-              >
-                <Download size={13} /> {actionLoading === 'update' ? '...' : 'Update'}
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const { data } = await api.post(`/devices/${selected.id}/connection-request`);
-                    alert(data.message);
-                  } catch (err: any) {
-                    alert(err.response?.data?.message || 'Connection request failed');
-                  }
-                }}
-                disabled={!selected.connectionRequestUrl}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-40"
-              >
-                <ExternalLink size={13} /> CR
-              </button>
-              <button
-                onClick={() => doAction('reset', selected.id)}
-                disabled={actionLoading === 'reset'}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-danger/20 text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
-              >
-                <Settings size={13} /> {actionLoading === 'reset' ? '...' : 'Reset'}
-              </button>
-              <button
-                onClick={() => deleteDevice(selected.id)}
-                disabled={actionLoading === 'delete'}
-                className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-danger text-white hover:opacity-90 transition-colors disabled:opacity-40"
-              >
-                <Trash2 size={13} /> {actionLoading === 'delete' ? '...' : 'Delete'}
-              </button>
+            <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-5 gap-2">
+                <button
+                  onClick={() => doAction('reboot', selected.id)}
+                  disabled={actionLoading === 'reboot'}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white hover:opacity-90 transition-colors disabled:opacity-40"
+                >
+                  <Power size={13} /> {actionLoading === 'reboot' ? '...' : 'Reboot'}
+                </button>
+                <button
+                  onClick={() => doProvision(selected.id)}
+                  disabled={actionLoading === 'provision'}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
+                >
+                  <RefreshCw size={13} /> {actionLoading === 'provision' ? '...' : 'Provision'}
+                </button>
+                <button
+                  onClick={() => doAction('update', selected.id)}
+                  disabled={actionLoading === 'update'}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
+                >
+                  <Download size={13} /> {actionLoading === 'update' ? '...' : 'Update'}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data } = await api.post(`/devices/${selected.id}/connection-request`);
+                      alert(data.message);
+                    } catch (err: any) {
+                      alert(err.response?.data?.message || 'Connection request failed');
+                    }
+                  }}
+                  disabled={!selected.connectionRequestUrl}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-40"
+                >
+                  <ExternalLink size={13} /> CR
+                </button>
+                <button
+                  onClick={() => doAction('reset', selected.id)}
+                  disabled={actionLoading === 'reset'}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-danger/20 text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
+                >
+                  <Settings size={13} /> {actionLoading === 'reset' ? '...' : 'Reset'}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={async () => {
+                    setActiveTab('WiFi');
+                    try {
+                      const { data } = await api.post(`/devices/${selected.id}/wifi/read`);
+                      if (data.source === 'cache' && data.params) {
+                        setSelected((prev: any) => ({
+                          ...prev,
+                          parameters: { ...prev.parameters, ...data.params },
+                        }));
+                        const ssid = data.params['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
+                          || data.params['Device.WiFi.SSID.1.SSID']
+                          || '';
+                        const pw = data.params['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
+                          || data.params['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
+                          || '';
+                        setTimeout(() => {
+                          const ssidEl = document.getElementById('wifi-ssid') as HTMLInputElement;
+                          const pwEl = document.getElementById('wifi-password') as HTMLInputElement;
+                          if (ssidEl) ssidEl.value = ssid;
+                          if (pwEl) pwEl.value = pw;
+                        }, 100);
+                        alert('WiFi configuration loaded from CPE');
+                      } else if (data.source === 'pending') {
+                        alert(data.message + ' Switch to WiFi tab and refresh after CPE responds.');
+                      }
+                    } catch (err: any) {
+                      alert(err.response?.data?.message || 'Failed to read WiFi config');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-green-500/30 text-green-600 hover:bg-green-50 transition-colors"
+                >
+                  <Radio size={13} /> Verificar WiFi
+                </button>
+                <button
+                  onClick={() => deleteDevice(selected.id)}
+                  disabled={actionLoading === 'delete'}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-danger text-white hover:opacity-90 transition-colors disabled:opacity-40"
+                >
+                  <Trash2 size={13} /> {actionLoading === 'delete' ? '...' : 'Deletar'}
+                </button>
+              </div>
             </div>
           </div>
 

@@ -170,10 +170,12 @@ export class CwmpService {
           parameters: {
             ...(device.parameters as any),
             ...paramMap,
-            ...(connectionRequestUrl && {
-              'Device.ManagementServer.ConnectionRequestURL': connectionRequestUrl,
-              'InternetGatewayDevice.ManagementServer.ConnectionRequestURL': connectionRequestUrl,
-            }),
+            'Device.ManagementServer.ConnectionRequestURL': connectionRequestUrl
+              || (device.parameters as any)?.['Device.ManagementServer.ConnectionRequestURL']
+              || '',
+            'InternetGatewayDevice.ManagementServer.ConnectionRequestURL': connectionRequestUrl
+              || (device.parameters as any)?.['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
+              || '',
           },
           ...(connectionRequestUrl && { connectionRequestUrl }),
         },
