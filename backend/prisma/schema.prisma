@@ -59,6 +59,8 @@ model Tenant {
   acsPassword            String   @default("alemnet")
   acsPublicUrl           String?
   connectionRequestEnabled Boolean @default(true)
+  defaultWiFiConfig      Json?
+  defaultScripts         Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

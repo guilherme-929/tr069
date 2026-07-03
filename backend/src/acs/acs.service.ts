@@ -169,6 +169,17 @@ export class AcsService implements OnModuleInit {
         });
       }
     }
+
+    // Mark task completed when CPE responds to commands
+    if (
+      xmlResponse.includes('SetParameterValuesResponse') ||
+      xmlResponse.includes('GetParameterValuesResponse') ||
+      xmlResponse.includes('RebootResponse') ||
+      xmlResponse.includes('FactoryResetResponse') ||
+      xmlResponse.includes('DownloadResponse')
+    ) {
+      this.markTaskCompleted(serial);
+    }
   }
 
   getSession(serial: string): CwmpSession | undefined {

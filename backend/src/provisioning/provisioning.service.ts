@@ -27,6 +27,21 @@ export class ProvisioningService {
       'Device.ManagementServer.ConnectionRequestURL': acsUrl,
     };
 
+    const wifiConfig = (device.tenant.defaultWiFiConfig as Record<string, string>) || {};
+    if (wifiConfig.ssid && wifiConfig.password) {
+      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] = wifiConfig.ssid;
+      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] = wifiConfig.password;
+      paramsWithCr['Device.WiFi.SSID.1.SSID'] = wifiConfig.ssid;
+      paramsWithCr['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] = wifiConfig.password;
+    }
+
+    const defaultScripts = (device.tenant.defaultScripts as Array<{ name: string; params: Record<string, string> }>) || [];
+    for (const script of defaultScripts) {
+      if (script.params) {
+        Object.assign(paramsWithCr, script.params);
+      }
+    }
+
     const task = await this.prisma.task.create({
       data: {
         deviceId,

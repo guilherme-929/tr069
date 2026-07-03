@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Save, Wifi } from 'lucide-react';
+import { Save, Wifi, Code, Plus, Trash2 } from 'lucide-react';
+
+interface Script {
+  name: string;
+  params: Record<string, string>;
+}
 
 export default function Settings() {
   const [acsPublicUrl, setAcsPublicUrl] = useState('');
@@ -8,10 +13,30 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
+  // WiFi Config state
+  const [ssid, setSsid] = useState('');
+  const [wifiPassword, setWifiPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [savingWifi, setSavingWifi] = useState(false);
+  const [wifiMessage, setWifiMessage] = useState('');
+
+  // Scripts state
+  const [scripts, setScripts] = useState<Script[]>([]);
+  const [newScriptName, setNewScriptName] = useState('');
+  const [newScriptParams, setNewScriptParams] = useState('');
+  const [savingScripts, setSavingScripts] = useState(false);
+  const [scriptsMessage, setScriptsMessage] = useState('');
+
   useEffect(() => {
     api.get('/tenant/settings').then(({ data }) => {
       setAcsPublicUrl(data.acsPublicUrl || '');
       setConnectionRequestEnabled(data.connectionRequestEnabled ?? true);
+      // Load WiFi config
+      const wifiConfig = data.defaultWiFiConfig || {};
+      setSsid(wifiConfig.ssid || '');
+      setWifiPassword(wifiConfig.password || '');
+      // Load scripts
+      setScripts(data.defaultScripts || []);
     }).catch(() => {});
   }, []);
 
@@ -25,6 +50,46 @@ export default function Settings() {
       setMessage(err.response?.data?.message || 'Failed to save settings');
     }
     setSaving(false);
+  };
+
+  const saveWifi = async () => {
+    setSavingWifi(true);
+    setWifiMessage('');
+    try {
+      await api.patch('/tenant/wifi-config', { ssid, password: wifiPassword });
+      setWifiMessage('WiFi configuration saved successfully');
+    } catch (err: any) {
+      setWifiMessage(err.response?.data?.message || 'Failed to save WiFi config');
+    }
+    setSavingWifi(false);
+  };
+
+  const saveScripts = async () => {
+    setSavingScripts(true);
+    setScriptsMessage('');
+    try {
+      await api.patch('/tenant/default-scripts', { scripts });
+      setScriptsMessage('Scripts saved successfully');
+    } catch (err: any) {
+      setScriptsMessage(err.response?.data?.message || 'Failed to save scripts');
+    }
+    setSavingScripts(false);
+  };
+
+  const addScript = () => {
+    if (!newScriptName.trim()) return;
+    try {
+      const params = newScriptParams ? JSON.parse(newScriptParams) : {};
+      setScripts([...scripts, { name: newScriptName, params }]);
+      setNewScriptName('');
+      setNewScriptParams('');
+    } catch {
+      alert('Invalid JSON in params');
+    }
+  };
+
+  const removeScript = (index: number) => {
+    setScripts(scripts.filter((_, i) => i !== index));
   };
 
   return (
@@ -91,6 +156,141 @@ export default function Settings() {
             {message && (
               <span className={`text-sm font-medium ${message.includes('success') ? 'text-success' : 'text-danger'}`}>
                 {message}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* WiFi Configuration Section */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+              <Wifi size={20} className="text-blue-500" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Default WiFi Configuration</h3>
+              <p className="text-xs text-slate-500">Default SSID and password applied to all new devices during provisioning</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Default SSID
+              </label>
+              <input
+                type="text"
+                value={ssid}
+                onChange={e => setSsid(e.target.value)}
+                placeholder="MyWiFiNetwork"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                Default WiFi Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={wifiPassword}
+                  onChange={e => setWifiPassword(e.target.value)}
+                  placeholder="********"
+                  className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center gap-3">
+            <button
+              onClick={saveWifi}
+              disabled={savingWifi}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              <Save size={16} /> {savingWifi ? 'Saving...' : 'Save WiFi Config'}
+            </button>
+            {wifiMessage && (
+              <span className={`text-sm font-medium ${wifiMessage.includes('success') ? 'text-success' : 'text-danger'}`}>
+                {wifiMessage}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Default Scripts Section */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center">
+              <Code size={20} className="text-green-500" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Default Provisioning Scripts</h3>
+              <p className="text-xs text-slate-500">Custom parameters applied during device provisioning</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {scripts.map((script, index) => (
+              <div key={index} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                <div className="flex-1">
+                  <div className="text-sm font-bold text-slate-900 dark:text-white">{script.name}</div>
+                  <div className="text-xs text-slate-500 font-mono mt-1">
+                    {Object.entries(script.params).map(([k, v]) => `${k}: ${v}`).join(', ')}
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeScript(index)}
+                  className="text-red-500 hover:text-red-700 p-1"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+
+            <div className="flex gap-2 mt-4">
+              <input
+                type="text"
+                value={newScriptName}
+                onChange={e => setNewScriptName(e.target.value)}
+                placeholder="Script name"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+              />
+              <input
+                type="text"
+                value={newScriptParams}
+                onChange={e => setNewScriptParams(e.target.value)}
+                placeholder='{"key": "value"}'
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+              />
+              <button
+                onClick={addScript}
+                className="flex items-center gap-1 px-3 py-2 bg-green-500 text-white rounded-lg text-sm font-bold hover:opacity-90"
+              >
+                <Plus size={14} /> Add
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center gap-3">
+            <button
+              onClick={saveScripts}
+              disabled={savingScripts}
+              className="flex items-center gap-2 px-5 py-2.5 bg-green-500 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              <Save size={16} /> {savingScripts ? 'Saving...' : 'Save Scripts'}
+            </button>
+            {scriptsMessage && (
+              <span className={`text-sm font-medium ${scriptsMessage.includes('success') ? 'text-success' : 'text-danger'}`}>
+                {scriptsMessage}
               </span>
             )}
           </div>

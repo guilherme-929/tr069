@@ -12,6 +12,7 @@ export class TenantService {
         id: true, name: true, slug: true,
         acsUsername: true, acsPassword: true,
         acsPublicUrl: true, connectionRequestEnabled: true,
+        defaultWiFiConfig: true, defaultScripts: true,
       },
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -43,6 +44,47 @@ export class TenantService {
       select: {
         id: true, name: true, slug: true,
         acsUsername: true, acsPublicUrl: true, connectionRequestEnabled: true,
+      },
+    });
+  }
+
+  async updateWiFiConfig(
+    tenantId: string,
+    data: { ssid?: string; password?: string },
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const currentConfig = (tenant.defaultWiFiConfig as Record<string, string>) || {};
+    const newConfig = {
+      ...currentConfig,
+      ...(data.ssid !== undefined && { ssid: data.ssid }),
+      ...(data.password !== undefined && { password: data.password }),
+    };
+
+    return this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { defaultWiFiConfig: newConfig },
+      select: {
+        id: true, name: true, slug: true,
+        defaultWiFiConfig: true,
+      },
+    });
+  }
+
+  async updateDefaultScripts(
+    tenantId: string,
+    data: { scripts: Array<{ name: string; params: Record<string, string> }> },
+  ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    return this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: { defaultScripts: data.scripts },
+      select: {
+        id: true, name: true, slug: true,
+        defaultScripts: true,
       },
     });
   }

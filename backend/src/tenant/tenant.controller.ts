@@ -37,4 +37,22 @@ export class TenantController {
   ) {
     return this.tenantService.updateAcsSettings(tenantId, body);
   }
+
+  @Roles(Role.ADMIN)
+  @Patch('wifi-config')
+  updateWiFiConfig(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: { ssid?: string; password?: string },
+  ) {
+    return this.tenantService.updateWiFiConfig(tenantId, body);
+  }
+
+  @Roles(Role.ADMIN)
+  @Patch('default-scripts')
+  updateDefaultScripts(
+    @CurrentUser('tenantId') tenantId: string,
+    @Body() body: { scripts: Array<{ name: string; params: Record<string, string> }> },
+  ) {
+    return this.tenantService.updateDefaultScripts(tenantId, body);
+  }
 }
