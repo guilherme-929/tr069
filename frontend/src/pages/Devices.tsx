@@ -527,8 +527,13 @@ export default function Devices() {
                             try {
                               const { data } = await api.post(`/devices/${selected.id}/wifi/read`);
                               if (data.source === 'cache' && data.params) {
-                                const ssid = Object.values(data.params).find(v => v.includes('_')) || Object.values(data.params)[0] || '';
-                                const pw = Object.values(data.params).find((_v, i) => i > 0 && i % 2 === 1) || '';
+                                const params: Record<string, string> = data.params;
+                                const ssid = params['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
+                                  || params['Device.WiFi.SSID.1.SSID']
+                                  || '';
+                                const pw = params['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
+                                  || params['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
+                                  || '';
                                 (document.getElementById('wifi-ssid') as HTMLInputElement).value = ssid;
                                 (document.getElementById('wifi-password') as HTMLInputElement).value = pw;
                                 alert('WiFi parameters loaded from cache');
