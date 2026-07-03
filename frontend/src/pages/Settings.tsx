@@ -21,12 +21,13 @@ export default function Settings() {
   const [scriptsMessage, setScriptsMessage] = useState('');
 
   useEffect(() => {
-    api.get('/tenant/settings').then(({ data }) => {
-      setAcsPublicUrl(data.acsPublicUrl || '');
-      setConnectionRequestEnabled(data.connectionRequestEnabled ?? true);
-      // Load scripts
-      setScripts(data.defaultScripts || []);
-    }).catch(() => {});
+      api.get('/tenant/settings').then(({ data }) => {
+        setAcsPublicUrl(data.acsPublicUrl || '');
+        setConnectionRequestEnabled(data.connectionRequestEnabled ?? true);
+        setScripts(data.defaultScripts || []);
+      }).catch((err) => {
+        console.error('Failed to load settings:', err);
+      });
   }, []);
 
   const save = async () => {
