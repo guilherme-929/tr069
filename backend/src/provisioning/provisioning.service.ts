@@ -21,7 +21,7 @@ export class ProvisioningService {
       || process.env.ACS_PUBLIC_URL
       || `http://localhost:${process.env.ACS_PORT || '7547'}`;
 
-    const paramsWithCr = {
+    const paramsWithCr: Record<string, string> = {
       ...defaultParams,
       'Device.ManagementServer.URL': defaultParams['Device.ManagementServer.URL'] || `${acsUrl}/cwmp`,
       'Device.ManagementServer.ConnectionRequestURL': acsUrl,
