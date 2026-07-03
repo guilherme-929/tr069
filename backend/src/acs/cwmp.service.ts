@@ -167,7 +167,14 @@ export class CwmpService {
           uptime: uptime || device.uptime,
           lastInform: new Date(),
           lastContact: new Date(),
-          parameters: paramMap as any,
+          parameters: {
+            ...(device.parameters as any),
+            ...paramMap,
+            ...(connectionRequestUrl && {
+              'Device.ManagementServer.ConnectionRequestURL': connectionRequestUrl,
+              'InternetGatewayDevice.ManagementServer.ConnectionRequestURL': connectionRequestUrl,
+            }),
+          },
           ...(connectionRequestUrl && { connectionRequestUrl }),
         },
       });
