@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower } from 'lucide-react';
 
-const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Logs'] as const;
+const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Discovery', 'Logs'] as const;
 type Tab = typeof tabs[number];
 
 export default function Devices() {
@@ -16,6 +16,8 @@ export default function Devices() {
   const [activeTab, setActiveTab] = useState<Tab>('Overview');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [discoveryStatus, setDiscoveryStatus] = useState<any>(null);
+  const [discoveryPolling, setDiscoveryPolling] = useState<any>(null);
 
   useEffect(() => {
     const params: any = { page, limit: 10 };
@@ -538,7 +540,23 @@ export default function Devices() {
 
             {activeTab === 'WiFi' && (
               <section>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">WiFi Configuration</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WiFi Configuration</h4>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { data } = await api.post(`/devices/${selected.id}/discover`);
+                        alert(data.message + ' Switch to Discovery tab to monitor progress.');
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || 'Failed to start discovery');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
+                  >
+                    <RadioTower size={13} /> Discover All WiFi Params
+                  </button>
+                </div>
+
                 <div className="space-y-3">
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                     <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">SSID & Password</div>
@@ -630,7 +648,134 @@ export default function Devices() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Discovered WiFi params */}
+                  {discoveryStatus?.wifiParams && Object.keys(discoveryStatus.wifiParams).length > 0 && (
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                      <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">
+                        All Discovered WiFi Parameters ({Object.keys(discoveryStatus.wifiParams).length})
+                      </div>
+                      <div className="max-h-60 overflow-y-auto space-y-1 font-mono text-xs">
+                        {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => {
+                          const isSsid = key.toLowerCase().includes('ssid') && !key.toLowerCase().includes('enab');
+                          const isPass = key.toLowerCase().includes('keypassphrase') || key.toLowerCase().includes('presharedkey');
+                          return (
+                            <p key={key} className="text-slate-600 dark:text-slate-400 break-all flex items-center gap-1">
+                              {isSsid && <Wifi size={10} className="flex-shrink-0 text-blue-500" />}
+                              {isPass && <Wifi size={10} className="flex-shrink-0 text-green-500" />}
+                              <span className={isSsid ? 'text-blue-600' : isPass ? 'text-green-600' : 'text-slate-500'}>{key}</span>
+                              <span className="text-slate-300"> = </span>
+                              <span className="text-slate-900 dark:text-white">{String(val)}</span>
+                            </p>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
+              </section>
+            )}
+
+            {activeTab === 'Discovery' && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parameter Discovery</h4>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { data } = await api.post(`/devices/${selected.id}/discover`);
+                        alert(data.message);
+                        // Start polling
+                        if (discoveryPolling) clearInterval(discoveryPolling);
+                        const interval = setInterval(async () => {
+                          try {
+                            const { data: status } = await api.get(`/devices/${selected.id}/discover/status`);
+                            setDiscoveryStatus(status);
+                            if (status.status === 'complete') clearInterval(interval);
+                          } catch {}
+                        }, 3000);
+                        setDiscoveryPolling(interval);
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || 'Failed to start discovery');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-opacity"
+                  >
+                    <RadioTower size={13} /> Scan All Parameters
+                  </button>
+                </div>
+
+                {discoveryStatus && (
+                  <div className="space-y-3 mb-4">
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-center">
+                        <div className="text-lg font-black text-slate-900 dark:text-white">{discoveryStatus.objects}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Objects</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-center">
+                        <div className="text-lg font-black text-slate-900 dark:text-white">{discoveryStatus.leaves}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Parameters</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-center">
+                        <div className="text-lg font-black text-slate-900 dark:text-white">{discoveryStatus.fetched}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Fetched</div>
+                      </div>
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg text-center">
+                        <div className="text-lg font-black text-slate-900 dark:text-white">{discoveryStatus.progress}%</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">Progress</div>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2">
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${discoveryStatus.progress}%` }}
+                      />
+                    </div>
+
+                    {discoveryStatus.status === 'scanning' && (
+                      <p className="text-xs text-warning font-semibold">Scanning in progress... Waiting for CPE responses.</p>
+                    )}
+                  </div>
+                )}
+
+                {discoveryStatus?.wifiParams && Object.keys(discoveryStatus.wifiParams).length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Discovered WiFi Parameters</h4>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-80 overflow-y-auto space-y-1">
+                      {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => (
+                        <p key={key} className="text-slate-600 dark:text-slate-400 break-all">
+                          <span className="text-green-600 dark:text-green-400">{key}</span>
+                          <span className="text-slate-300"> = </span>
+                          <span className="text-slate-900 dark:text-white">{String(val)}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {discoveryStatus?.parameters && (
+                  <div className="mt-4">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">All Discovered Parameters ({Object.keys(discoveryStatus.parameters).length})</h4>
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-80 overflow-y-auto space-y-1">
+                      {Object.entries(discoveryStatus.parameters as Record<string, string>).sort().map(([key, val]) => (
+                        <p key={key} className="text-slate-600 dark:bg-slate-800/50 break-all">
+                          <span className="text-primary">{key}</span>
+                          <span className="text-slate-300"> = </span>
+                          <span className="text-slate-900 dark:text-white">{String(val)}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!discoveryStatus && (
+                  <div className="p-6 text-center">
+                    <RadioTower size={32} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-sm text-slate-400">Click "Scan All Parameters" to discover all TR-069 parameters available on this device.</p>
+                    <p className="text-xs text-slate-400 mt-1">The scan runs recursively and fetches values for each parameter.</p>
+                  </div>
+                )}
               </section>
             )}
 

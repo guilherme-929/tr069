@@ -207,6 +207,7 @@ export class AcsService implements OnModuleInit {
     if (
       xmlResponse.includes('SetParameterValuesResponse') ||
       xmlResponse.includes('GetParameterValuesResponse') ||
+      xmlResponse.includes('GetParameterNamesResponse') ||
       xmlResponse.includes('RebootResponse') ||
       xmlResponse.includes('FactoryResetResponse') ||
       xmlResponse.includes('DownloadResponse')

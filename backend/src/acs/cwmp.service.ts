@@ -306,16 +306,46 @@ export class CwmpService {
       where: { serial: this.lastSerial },
     });
     if (device) {
-      const currentParams = (device.parameters as Record<string, string>) || {};
+      const currentParams = (device.parameters as Record<string, any>) || {};
+      const discovered = currentParams.__discovered__ || {};
+
+      // Update main parameters and discovery values
+      const updatedParams = { ...currentParams };
+      const updatedValues = { ...(discovered._values || {}), ...paramMap };
+
+      // Put actual values in the top-level, keep discovery metadata in __discovered__
+      for (const [key, val] of Object.entries(paramMap)) {
+        updatedParams[key] = val;
+      }
+      updatedParams.__discovered__ = { ...discovered, _values: updatedValues };
+
       await this.prisma.device.update({
         where: { id: device.id },
-        data: { parameters: { ...currentParams, ...paramMap } as any },
+        data: { parameters: updatedParams as any },
       });
+
+      // Check if discovery is complete
+      const discoveredLeaves = discovered._leaves || [];
+      const fetchedCount = Object.keys(updatedValues).length;
 
       await this.prisma.task.updateMany({
         where: { deviceId: device.id, type: 'GetParameterValues', status: 'IN_PROGRESS' },
         data: { status: 'COMPLETED', result: paramMap as any },
       });
+
+      // Log discovery progress
+      if (discoveredLeaves.length > 0) {
+        await this.prisma.log.create({
+          data: {
+            action: 'DISCOVERY',
+            entity: 'DEVICE',
+            entityId: device.id,
+            detail: `Discovered ${fetchedCount}/${discoveredLeaves.length} parameters for ${device.serial}`,
+            deviceId: device.id,
+            tenantId: device.tenantId,
+          },
+        });
+      }
     }
 
     return this.buildEmptySoapEnvelope();
@@ -337,6 +367,90 @@ export class CwmpService {
   }
 
   private async handleGetParameterNamesResponse(data: any): Promise<string> {
+    const response = data?.['cwmp:GetParameterNamesResponse'] || data?.GetParameterNamesResponse;
+    if (!response || !this.lastSerial) return this.buildEmptySoapEnvelope();
+
+    const paramList = response?.ParameterList?.ParameterInfoStruct || [];
+    const params = Array.isArray(paramList) ? paramList : [paramList];
+
+    const device = await this.prisma.device.findUnique({
+      where: { serial: this.lastSerial },
+    });
+    if (!device) return this.buildEmptySoapEnvelope();
+
+    const currentParams = (device.parameters as Record<string, string>) || {};
+
+    const objectsToExplore: string[] = [];
+    const leafParams: string[] = [];
+
+    for (const p of params) {
+      const name = p.Name || '';
+      const writable = p.Writable === true || p.Writable === 'true';
+      if (!name) continue;
+
+      // Parameters ending with '.' are objects (containers)
+      if (name.endsWith('.')) {
+        objectsToExplore.push(name);
+      } else {
+        leafParams.push(name);
+      }
+    }
+
+    // Store discovered structure inside parameters.__discovered__
+    const allParams = (device.parameters as Record<string, any>) || {};
+    const discovered = allParams.__discovered__ || {};
+    discovered._objects = [...new Set([...(discovered._objects || []), ...objectsToExplore])];
+    discovered._leaves = [...new Set([...(discovered._leaves || []), ...leafParams])];
+    discovered._writable = { ...(discovered._writable || {}), ...Object.fromEntries(params.filter((p: any) => p.Writable).map((p: any) => [p.Name, true])) };
+
+    // Fetch values for discovered leaf params
+    if (leafParams.length > 0) {
+      // Store discovered structure first
+      await this.prisma.device.update({
+        where: { id: device.id },
+        data: { parameters: { ...allParams, __discovered__: discovered } as any },
+      });
+
+      // Queue GetParameterValues for these params - use refreshObject approach
+      // for large sets, but for now do batched GetParameterValues
+      await this.prisma.task.create({
+        data: {
+          deviceId: device.id,
+          type: 'GetParameterValues',
+          status: 'PENDING',
+          payload: { names: leafParams },
+          tenantId: device.tenantId,
+        },
+      });
+    } else {
+      // No new leaf params, just update discovered structure
+      await this.prisma.device.update({
+        where: { id: device.id },
+        data: { parameters: { ...allParams, __discovered__: discovered } as any },
+      });
+    }
+
+    // Queue exploration of child objects
+    if (objectsToExplore.length > 0) {
+      for (const objPath of objectsToExplore) {
+        await this.prisma.task.create({
+          data: {
+            deviceId: device.id,
+            type: 'GetParameterNames',
+            status: 'PENDING',
+            payload: { parameterPath: objPath, nextLevel: true },
+            tenantId: device.tenantId,
+          },
+        });
+      }
+    }
+
+    // Mark the current task as completed
+    await this.prisma.task.updateMany({
+      where: { deviceId: device.id, type: 'GetParameterNames', status: 'IN_PROGRESS' },
+      data: { status: 'COMPLETED' },
+    });
+
     return this.buildEmptySoapEnvelope();
   }
 
@@ -553,6 +667,89 @@ export class CwmpService {
     return { task, message: 'Fetching WiFi parameters from CPE...', source: 'pending' };
   }
 
+  async handleDiscover(deviceId: string): Promise<any> {
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error('Device not found');
+
+    // Reset discovered state within parameters
+    const currentParams = (device.parameters as Record<string, any>) || {};
+    await this.prisma.device.update({
+      where: { id: deviceId },
+      data: {
+        parameters: { ...currentParams, __discovered__: { _objects: [], _leaves: [], _values: {}, _writable: {} } } as any,
+      },
+    });
+
+    // Start recursive discovery from root
+    const task = await this.prisma.task.create({
+      data: {
+        deviceId,
+        type: 'GetParameterNames',
+        status: 'PENDING',
+        payload: { parameterPath: '', nextLevel: true },
+        tenantId: device.tenantId,
+      },
+    });
+
+    await this.prisma.log.create({
+      data: {
+        action: 'DISCOVERY',
+        entity: 'DEVICE',
+        entityId: deviceId,
+        detail: `Full parameter discovery started for ${device.serial}`,
+        deviceId,
+        tenantId: device.tenantId,
+      },
+    });
+
+    return { task, message: 'Full parameter discovery queued. Will process on next CPE connection.' };
+  }
+
+  async handleGetDiscoveryStatus(deviceId: string): Promise<any> {
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error('Device not found');
+
+    const allParams = (device.parameters as Record<string, any>) || {};
+    const discovered = allParams.__discovered__ || {};
+    const objects = discovered._objects || [];
+    const leaves = discovered._leaves || [];
+    const values = discovered._values || {};
+    const writable = discovered._writable || {};
+
+    const fetchedCount = Object.keys(values).length;
+    const totalParams = leaves.length;
+
+    const pendingTasks = await this.prisma.task.count({
+      where: { deviceId, type: { in: ['GetParameterNames', 'GetParameterValues'] }, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+    });
+
+    // Extract WiFi-related parameters from discovered values
+    const wifiParams = Object.fromEntries(
+      Object.entries(values).filter(([key]) =>
+        key.toLowerCase().includes('wifi') ||
+        key.toLowerCase().includes('wlan') ||
+        key.toLowerCase().includes('ssid') ||
+        key.toLowerCase().includes('presharedkey') ||
+        key.toLowerCase().includes('keypassphrase') ||
+        key.toLowerCase().includes('beacon') ||
+        key.toLowerCase().includes('channel') ||
+        key.toLowerCase().includes('radi'),
+      ),
+    );
+
+    return {
+      status: pendingTasks > 0 ? 'scanning' : (totalParams > 0 ? 'complete' : 'idle'),
+      objects: objects.length,
+      leaves: totalParams,
+      fetched: fetchedCount,
+      pendingTasks,
+      progress: totalParams > 0 ? Math.round((fetchedCount / totalParams) * 100) : 0,
+      parameters: values,
+      writable,
+      wifiParams,
+    };
+  }
+
   async handleUpload(deviceId: string, fileType: string): Promise<any> {
     return this.buildSoapResponse('UploadResponse', {
       Status: 0,
@@ -581,6 +778,17 @@ export class CwmpService {
             DelaySeconds: 0,
             SuccessURL: '',
             FailureURL: '',
+          }),
+        );
+      }
+      case 'GetParameterNames': {
+        const payload = task.payload as any;
+        const paramPath = payload?.parameterPath || '';
+        const nextLevel = payload?.nextLevel ?? true;
+        return this.builder.build(
+          this.buildSoapResponse('GetParameterNames', {
+            ParameterPath: paramPath,
+            NextLevel: nextLevel,
           }),
         );
       }

@@ -112,4 +112,20 @@ export class AcsController {
   readWiFi(@Param('id') id: string) {
     return this.cwmpService.handleReadWiFiConfig(id);
   }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Post('api/devices/:id/discover')
+  discover(@Param('id') id: string) {
+    return this.cwmpService.handleDiscover(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Get('api/devices/:id/discover/status')
+  discoverStatus(@Param('id') id: string) {
+    return this.cwmpService.handleGetDiscoveryStatus(id);
+  }
 }
