@@ -250,6 +250,37 @@ export class CwmpService {
       },
     });
 
+    const acsUrl = process.env.ACS_PUBLIC_URL || `http://${ipAddress || 'localhost'}:${process.env.ACS_PORT || '7547'}`;
+    const expectedAcsUrl = `${acsUrl}/cwmp`;
+    const currentAcsUrl = paramMap['Device.ManagementServer.URL']
+      || paramMap['InternetGatewayDevice.ManagementServer.URL']
+      || '';
+
+    if (currentAcsUrl !== expectedAcsUrl && currentAcsUrl !== '0.0.0.0') {
+      const existingPending = await this.prisma.task.count({
+        where: { deviceId: device.id, status: 'PENDING', type: 'Provision' },
+      });
+      if (existingPending === 0) {
+        this.logger.log(`Auto-provisioning device ${serial} — ACS URL mismatch: "${currentAcsUrl}" !== "${expectedAcsUrl}"`);
+        await this.prisma.task.create({
+          data: {
+            deviceId: device.id,
+            type: 'Provision',
+            status: 'PENDING',
+            payload: {
+              parameters: {
+                'Device.ManagementServer.URL': expectedAcsUrl,
+                'Device.ManagementServer.PeriodicInformInterval': '60',
+                'InternetGatewayDevice.ManagementServer.URL': expectedAcsUrl,
+                'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': '60',
+              },
+            },
+            tenantId: device.tenantId,
+          },
+        });
+      }
+    }
+
     const pendingCount = await this.prisma.task.count({
       where: { deviceId: device.id, status: 'PENDING' },
     });
