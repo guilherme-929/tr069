@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower, Monitor, Signal, SignalHigh } from 'lucide-react';
 
-const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Discovery', 'Logs'] as const;
+const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Clients', 'Discovery', 'Logs'] as const;
 type Tab = typeof tabs[number];
 
 export default function Devices() {
@@ -18,6 +18,10 @@ export default function Devices() {
   const [showPassword, setShowPassword] = useState(false);
   const [discoveryStatus, setDiscoveryStatus] = useState<any>(null);
   const [discoveryPolling, setDiscoveryPolling] = useState<any>(null);
+  const [virtualParams, setVirtualParams] = useState<any>(null);
+  const [connectedDevices, setConnectedDevices] = useState<any[]>([]);
+  const [virtualParamsLoading, setVirtualParamsLoading] = useState(false);
+  const [connectedDevicesLoading, setConnectedDevicesLoading] = useState(false);
 
   useEffect(() => {
     const params: any = { page, limit: 10 };
@@ -46,6 +50,28 @@ export default function Devices() {
           } catch {}
         })();
       }
+    }
+  }, [activeTab, selected?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'Overview' && selected) {
+      setVirtualParamsLoading(true);
+      setVirtualParams(null);
+      api.get(`/devices/${selected.id}/virtual-params`)
+        .then(({ data }) => setVirtualParams(data))
+        .catch(() => setVirtualParams(null))
+        .finally(() => setVirtualParamsLoading(false));
+    }
+  }, [activeTab, selected?.id]);
+
+  useEffect(() => {
+    if (activeTab === 'Clients' && selected) {
+      setConnectedDevicesLoading(true);
+      setConnectedDevices([]);
+      api.get(`/devices/${selected.id}/connected-devices`)
+        .then(({ data }) => setConnectedDevices(Array.isArray(data) ? data : []))
+        .catch(() => setConnectedDevices([]))
+        .finally(() => setConnectedDevicesLoading(false));
     }
   }, [activeTab, selected?.id]);
 
@@ -374,6 +400,26 @@ export default function Devices() {
                   </div>
                 </section>
 
+                {virtualParams && (
+                  <section>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Virtual Parameters</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(virtualParams).map(([key, val]) => (
+                        <div key={key} className="p-2.5 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-800/50 dark:to-blue-950/20 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                          <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">{key}</div>
+                          <div className="text-sm font-bold text-slate-900 dark:text-white font-mono">{String(val)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {virtualParamsLoading && (
+                  <section>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Virtual Parameters</h4>
+                    <p className="text-sm text-slate-400 italic">Loading...</p>
+                  </section>
+                )}
+
                 {selected.events?.length > 0 && (
                   <section>
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Events</h4>
@@ -557,122 +603,149 @@ export default function Devices() {
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                    <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">SSID & Password</div>
+                {(() => {
+                  const p = selected.parameters as Record<string, string> || {};
+                  const allParams = { ...p, ...(discoveryStatus?.wifiParams || {}) };
 
+                  // Group WLAN params by instance index
+                  const wlanInstances: Record<string, Record<string, string>> = {};
+                  Object.entries(allParams).forEach(([key, val]) => {
+                    const igdMatch = key.match(/InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.(\d+)\.(.+)/);
+                    const devMatch = key.match(/Device\.WiFi\.(?:SSID|AccessPoint|Radio)\.(\d+)\.(.+)/);
+                    const idx = igdMatch?.[1] || devMatch?.[1];
+                    const subKey = igdMatch?.[2] || devMatch?.[2] || key;
+                    if (idx) {
+                      if (!wlanInstances[idx]) wlanInstances[idx] = {};
+                      wlanInstances[idx][subKey] = String(val);
+                    }
+                  });
+
+                  const bandLabels: Record<string, string> = { '1': '2.4 GHz', '2': '2.4 GHz (Guest)', '3': '5 GHz', '4': '5 GHz (Guest)', '5': '2.4 GHz IoT', '6': '5 GHz IoT', '7': '6 GHz', '8': '6 GHz (Guest)' };
+
+                  // Check if we have discoveryStatus for merge
+                  const hasDiscoveredWifi = discoveryStatus?.wifiParams && Object.keys(discoveryStatus.wifiParams).length > 0;
+
+                  const instances = Object.entries(wlanInstances).sort(([a], [b]) => Number(a) - Number(b));
+
+                  return (
                     <div className="space-y-3">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">SSID (WiFi Name)</label>
-                        <input
-                          type="text"
-                          id="wifi-ssid"
-                          defaultValue={(() => {
-                            const p = selected.parameters as Record<string, string> || {};
-                            return p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
-                              || p['Device.WiFi.SSID.1.SSID']
-                              || '';
-                          })()}
-                          className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">WiFi Password</label>
-                        <div className="relative">
-                          <input
-                            type={showPassword ? 'text' : 'password'}
-                            id="wifi-password"
-                            defaultValue={(() => {
-                              const p = selected.parameters as Record<string, string> || {};
-                              return p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
-                                || p['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
-                                || '';
-                            })()}
-                            className="w-full pr-10 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                          >
-                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                          </button>
+                      {instances.length === 0 && (
+                        <div className="p-6 text-center">
+                          <Wifi size={32} className="mx-auto text-slate-300 mb-2" />
+                          <p className="text-sm text-slate-400">No WiFi parameters found. Click "Discover All WiFi Params" to scan.</p>
                         </div>
-                      </div>
+                      )}
 
-                      <div className="flex gap-2">
-                        <button
-                          onClick={async () => {
-                            const ssid = (document.getElementById('wifi-ssid') as HTMLInputElement).value;
-                            const password = (document.getElementById('wifi-password') as HTMLInputElement).value;
-                            if (!ssid || !password) { alert('Fill in both SSID and password'); return; }
-                            try {
-                              const { data } = await api.post(`/devices/${selected.id}/wifi`, { ssid, password });
-                              alert(data.message);
-                              selectDevice(selected.id);
-                            } catch (err: any) {
-                              alert(err.response?.data?.message || 'Failed to save WiFi config');
-                            }
-                          }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-opacity"
-                        >
-                          <Save size={13} /> Save & Push to CPE
-                        </button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              const { data } = await api.post(`/devices/${selected.id}/wifi/read`);
-                              if (data.source === 'cache' && data.params) {
-                                const params: Record<string, string> = data.params;
-                                const ssid = params['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
-                                  || params['Device.WiFi.SSID.1.SSID']
-                                  || '';
-                                const pw = params['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
-                                  || params['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
-                                  || '';
-                                (document.getElementById('wifi-ssid') as HTMLInputElement).value = ssid;
-                                (document.getElementById('wifi-password') as HTMLInputElement).value = pw;
-                                alert('WiFi parameters loaded from cache');
-                              } else {
-                                alert(data.message + ' Refresh the page after the CPE connects.');
-                              }
-                            } catch (err: any) {
-                              alert(err.response?.data?.message || 'Failed to read WiFi config');
-                            }
-                          }}
-                          className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
-                        >
-                          <RefreshCw size={13} /> Read from CPE
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                      {instances.map(([idx, params]) => {
+                        const ssid = params['SSID'] || '';
+                        const pwdKey = Object.keys(params).find(k => k.toLowerCase().includes('keypassphrase') || k.toLowerCase().includes('presharedkey'));
+                        const password = pwdKey ? params[pwdKey] : '';
+                        const enabled = params['Enable'] === '1' || params['Enable'] === 'true';
+                        const channel = params['Channel'] || '-';
+                        const standard = params['Standard'] || params['X_ZTE-COM_Standard'] || '-';
+                        const bandwidth = params['X_ZTE-COM_BandWidth'] || params['OperatingStandards'] || '-';
+                        const associations = params['TotalAssociations'] || params['X_ZTE-COM_TotalAssociations'] || '-';
+                        const freqBand = params['OperatingFrequencyBand'] || params['X_ZTE-COM_OperatingFrequencyBand'] || bandLabels[idx] || `Band ${idx}`;
+                        return (
+                          <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2.5 h-2.5 rounded-full ${enabled ? 'bg-success' : 'bg-slate-300'}`} />
+                                <span className="text-sm font-bold text-slate-900 dark:text-white">WLAN {idx} — {freqBand}</span>
+                              </div>
+                              <span className="text-[10px] font-mono text-slate-400">{associations} clients</span>
+                            </div>
 
-                  {/* Discovered WiFi params */}
-                  {discoveryStatus?.wifiParams && Object.keys(discoveryStatus.wifiParams).length > 0 && (
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                      <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">
-                        All Discovered WiFi Parameters ({Object.keys(discoveryStatus.wifiParams).length})
-                      </div>
-                      <div className="max-h-60 overflow-y-auto space-y-1 font-mono text-xs">
-                        {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => {
-                          const isSsid = key.toLowerCase().includes('ssid') && !key.toLowerCase().includes('enab');
-                          const isPass = key.toLowerCase().includes('keypassphrase') || key.toLowerCase().includes('presharedkey');
-                          return (
-                            <p key={key} className="text-slate-600 dark:text-slate-400 break-all flex items-center gap-1">
-                              {isSsid && <Wifi size={10} className="flex-shrink-0 text-blue-500" />}
-                              {isPass && <Wifi size={10} className="flex-shrink-0 text-green-500" />}
-                              <span className={isSsid ? 'text-blue-600' : isPass ? 'text-green-600' : 'text-slate-500'}>{key}</span>
-                              <span className="text-slate-300"> = </span>
-                              <span className="text-slate-900 dark:text-white">{String(val)}</span>
-                            </p>
-                          );
-                        })}
-                      </div>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase block">SSID</label>
+                                <input
+                                  type="text"
+                                  defaultValue={ssid}
+                                  id={`wifi-ssid-${idx}`}
+                                  className="w-full px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase block">Password</label>
+                                <div className="relative">
+                                  <input
+                                    type={showPassword ? 'text' : 'password'}
+                                    defaultValue={password}
+                                    id={`wifi-password-${idx}`}
+                                    className="w-full pr-7 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-3 text-[10px] font-mono text-slate-500">
+                              <span>Ch: <strong className="text-slate-700 dark:text-slate-300">{channel}</strong></span>
+                              <span>Std: <strong className="text-slate-700 dark:text-slate-300">{standard}</strong></span>
+                              <span>BW: <strong className="text-slate-700 dark:text-slate-300">{bandwidth}</strong></span>
+                            </div>
+
+                            <div className="mt-2 flex gap-1.5">
+                              <button
+                                onClick={async () => {
+                                  const sid = (document.getElementById(`wifi-ssid-${idx}`) as HTMLInputElement).value;
+                                  const pw = (document.getElementById(`wifi-password-${idx}`) as HTMLInputElement).value;
+                                  if (!sid || !pw) { alert('Fill in both SSID and password'); return; }
+                                  try {
+                                    const { data } = await api.post(`/devices/${selected.id}/wifi`, { ssid: sid, password: pw, instance: Number(idx) });
+                                    alert(data.message);
+                                    selectDevice(selected.id);
+                                  } catch (err: any) {
+                                    alert(err.response?.data?.message || 'Failed to save WiFi config');
+                                  }
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-primary text-white hover:opacity-90"
+                              >
+                                <Save size={10} /> Save
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const { data } = await api.post(`/devices/${selected.id}/wifi/read`, { instance: Number(idx) });
+                                    if (data.source === 'cache' && data.params) {
+                                      const merged = { ...allParams, ...data.params };
+                                      // Refresh the view by forcing re-render with merged params
+                                      setSelected((prev: any) => ({
+                                        ...prev,
+                                        parameters: { ...prev.parameters, ...merged },
+                                      }));
+                                      alert('WiFi parameters loaded');
+                                    } else {
+                                      alert(data.message + ' Refresh after CPE connects.');
+                                    }
+                                  } catch (err: any) {
+                                    alert(err.response?.data?.message || 'Failed to read WiFi config');
+                                  }
+                                }}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold border border-slate-200 hover:bg-slate-50"
+                              >
+                                <RefreshCw size={10} /> Read
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {hasDiscoveredWifi && (
+                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                          <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">Raw Discovered WiFi Params</div>
+                          <div className="max-h-40 overflow-y-auto space-y-0.5 font-mono text-[10px]">
+                            {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => (
+                              <p key={key} className="text-slate-500 break-all">
+                                <span className="text-primary">{key}</span> = <span className="text-slate-700 dark:text-slate-300">{String(val)}</span>
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </section>
             )}
 
@@ -774,6 +847,67 @@ export default function Devices() {
                     <RadioTower size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-sm text-slate-400">Click "Scan All Parameters" to discover all TR-069 parameters available on this device.</p>
                     <p className="text-xs text-slate-400 mt-1">The scan runs recursively and fetches values for each parameter.</p>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {activeTab === 'Clients' && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Connected Clients</h4>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { data } = await api.post(`/devices/${selected.id}/discover`);
+                        alert(data.message + ' Switch to Discovery tab to monitor progress.');
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || 'Failed to start discovery');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50"
+                  >
+                    <RadioTower size={13} /> Discover All
+                  </button>
+                </div>
+                {connectedDevicesLoading ? (
+                  <p className="text-sm text-slate-400 italic">Loading...</p>
+                ) : connectedDevices.length === 0 ? (
+                  <div className="p-6 text-center">
+                    <Monitor size={32} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-sm text-slate-400">No connected clients found.</p>
+                    <p className="text-xs text-slate-400 mt-1">Run a discovery scan to detect associated devices.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="border-b border-slate-100 dark:border-slate-800">
+                          {['MAC', 'Signal (RSSI)', 'SNR', 'Noise', 'TX Rate', 'RX Rate', 'IP', 'Last Seen'].map(h => (
+                            <th key={h} className="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                        {connectedDevices.map((client: any, i: number) => (
+                          <tr key={client.mac || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="px-2 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white">{client.mac || client.MACAddress || '-'}</td>
+                            <td className="px-2 py-2">
+                              <div className="flex items-center gap-1.5">
+                                {client.rssi || client.RSSI ? <Signal size={12} className={Number(client.rssi || client.RSSI) > -60 ? 'text-success' : Number(client.rssi || client.RSSI) > -75 ? 'text-warning' : 'text-danger'} /> : null}
+                                <span className="text-xs font-mono text-slate-600 dark:text-slate-400">{client.rssi || client.RSSI || '-'}</span>
+                              </div>
+                            </td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.snr || client.SNR || '-'}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.noise || client.Noise || '-'}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.txRate || client.TXRate || client['X_ZTE-COM_TransmitRate'] || '-'}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.rxRate || client.RXRate || client['X_ZTE-COM_ReceiveRate'] || '-'}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.ip || client.IPAddress || '-'}</td>
+                            <td className="px-2 py-2 text-xs text-slate-400">{client.lastSeen || client.LastSeen || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </section>

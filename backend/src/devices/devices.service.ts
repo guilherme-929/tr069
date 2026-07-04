@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { CwmpService } from '../acs/cwmp.service';
 
 @Injectable()
 export class DevicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private cwmpService: CwmpService,
+  ) {}
 
   async findAll(
     tenantId: string,
@@ -104,5 +108,71 @@ export class DevicesService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+  }
+
+  async getVirtualParameters(id: string) {
+    const device = await this.prisma.device.findUnique({ where: { id } });
+    if (!device) throw new NotFoundException('Device not found');
+
+    const params = (device.parameters as Record<string, string>) || {};
+
+    const extractIp = (path: string): string => {
+      for (const k of Object.keys(params)) {
+        if (k.startsWith(path)) return params[k] || '';
+      }
+      return '';
+    };
+
+    const vLoginPPPoE = params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username']
+      || params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username']
+      || '';
+
+    const vWAN1_IP = params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress']
+      || params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress']
+      || extractIp('InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1')
+      || '';
+
+    const vWAN2_IP = params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.ExternalIPAddress']
+      || params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.ExternalIPAddress']
+      || '';
+
+    const vIP_Voip = params['InternetGatewayDevice.VoiceService.1.VoIPProfile.1.SIP.ProxyServer']
+      || '';
+
+    const wifiBands: { band: string; ssid: string; channel: string; status: string; standard: string; associations: string }[] = [];
+    for (let i = 1; i <= 8; i++) {
+      const prefix = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}`;
+      const ssid = params[`${prefix}.SSID`];
+      if (ssid) {
+        wifiBands.push({
+          band: params[`${prefix}.X_ZTE-COM_OperatingFrequencyBand`]
+            || params[`${prefix}.X_ZTE-COM_WLAN_SupportedFrequencyBands`] || `WLAN${i}`,
+          ssid,
+          channel: params[`${prefix}.Channel`] || '',
+          status: params[`${prefix}.Status`] || '',
+          standard: params[`${prefix}.Standard`] || '',
+          associations: params[`${prefix}.TotalAssociations`] || '0',
+        });
+      }
+    }
+
+    const wifi2g = wifiBands.find(b => b.band.includes('2.4') || b.band === 'WLAN1');
+    const wifi5g = wifiBands.find(b => b.band.includes('5') || b.band === 'WLAN5');
+
+    return {
+      vLoginPPPoE,
+      vWAN1_IP,
+      vWAN2_IP,
+      vIP_Voip,
+      vWifi2G: wifi2g ? `${wifi2g.ssid} | Ch:${wifi2g.channel} | ${wifi2g.status}` : '',
+      vWifi5G: wifi5g ? `${wifi5g.ssid} | Ch:${wifi5g.channel} | ${wifi5g.status}` : '',
+      wifiBands,
+    };
+  }
+
+  async getConnectedDevices(id: string) {
+    const device = await this.prisma.device.findUnique({ where: { id } });
+    if (!device) throw new NotFoundException('Device not found');
+    return this.cwmpService.handleGetConnectedDevices(id);
   }
 }

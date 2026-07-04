@@ -57,4 +57,16 @@ export class DevicesController {
   remove(@Param('id') id: string) {
     return this.devicesService.remove(id);
   }
+
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Get(':id/virtual-params')
+  getVirtualParams(@Param('id') id: string) {
+    return this.devicesService.getVirtualParameters(id);
+  }
+
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Get(':id/connected-devices')
+  getConnectedDevices(@Param('id') id: string) {
+    return this.devicesService.getConnectedDevices(id);
+  }
 }

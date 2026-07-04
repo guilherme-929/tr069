@@ -627,16 +627,28 @@ export class CwmpService {
 
     const params = (device.parameters as Record<string, string>) || {};
 
-    const wifiPaths = [
-      'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
-      'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase',
-      'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable',
+    const wifiPaths: string[] = [];
+    for (let i = 1; i <= 8; i++) {
+      wifiPaths.push(
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.KeyPassphrase`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Enable`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Channel`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Status`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Standard`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.BandWidth`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
+        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
+      );
+    }
+    wifiPaths.push(
       'Device.WiFi.SSID.1.SSID',
       'Device.WiFi.AccessPoint.1.Security.KeyPassphrase',
-    ];
+    );
 
     const existingParams = wifiPaths.reduce((acc, path) => {
-      if (params[path]) acc[path] = params[path];
+      if (params[path] !== undefined && params[path] !== '') acc[path] = params[path];
       return acc;
     }, {} as Record<string, string>);
 
@@ -665,6 +677,47 @@ export class CwmpService {
     });
 
     return { task, message: 'Fetching WiFi parameters from CPE...', source: 'pending' };
+  }
+
+  async handleGetConnectedDevices(deviceId: string): Promise<any> {
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error('Device not found');
+
+    const params = (device.parameters as Record<string, string>) || {};
+    const connectedDevices: any[] = [];
+
+    for (let wlan = 1; wlan <= 8; wlan++) {
+      let devIndex = 1;
+      while (true) {
+        const base = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${wlan}.AssociatedDevice.${devIndex}`;
+        const mac = params[`${base}.AssociatedDeviceMACAddress`]
+          || params[`${base}.X_ZTE-COM_MACAddress`];
+        if (!mac) break;
+
+        connectedDevices.push({
+          wlan,
+          mac,
+          name: params[`${base}.X_ZTE-COM_AssociatedDeviceName`] || '',
+          ip: params[`${base}.AssociatedDeviceIPAddress`] || '',
+          rssi: parseInt(params[`${base}.AssociatedDeviceRssi`] || '0'),
+          snr: parseInt(params[`${base}.X_ZTE-COM_WLAN_SNR`] || '0'),
+          noise: parseInt(params[`${base}.X_ZTE-COM_WLAN_Noise`] || '0'),
+          bandwidth: params[`${base}.AssociatedDeviceBandWidth`] || '',
+          txRate: parseInt(params[`${base}.X_ZTE-COM_TXRate`] || params[`${base}.AssociatedDeviceRate`] || '0'),
+          rxRate: parseInt(params[`${base}.X_ZTE-COM_RXRate`] || '0'),
+          bytesReceived: parseInt(params[`${base}.X_ZTE-COM_WLAN_BytesReceived`] || '0'),
+          bytesSent: parseInt(params[`${base}.X_ZTE-COM_WLAN_BytesSend`] || '0'),
+          stayTime: params[`${base}.X_ZTE-COM_StayTime`] || '0',
+          radio: params[`${base}.X_ZTE-COM_WLAN_Radio`] || '',
+          clientMode: params[`${base}.X_ZTE-COM_WLAN_ClientMode`] || '',
+          clientChannelWidth: params[`${base}.X_ZTE-COM_WLAN_ClientChannelWidth`] || '',
+          signalStrength: parseInt(params[`${base}.X_ZTE-COM_SignalStrength`] || params[`${base}.X_ZTE-COM_WLAN_RSSI`] || '0'),
+        });
+        devIndex++;
+      }
+    }
+
+    return connectedDevices;
   }
 
   async handleDiscover(deviceId: string): Promise<any> {
