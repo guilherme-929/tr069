@@ -14,6 +14,7 @@ import { AlertsModule } from './alerts/alerts.module';
 import { TenantModule } from './tenant/tenant.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { QueueModule } from './queue/queue.module';
+import { ScriptsModule } from './scripts/scripts.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { QueueModule } from './queue/queue.module';
     TenantModule,
     WebsocketModule,
     QueueModule,
+    ScriptsModule,
   ],
   providers: [PrismaService],
   exports: [PrismaService],

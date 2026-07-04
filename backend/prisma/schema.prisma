@@ -74,6 +74,7 @@ model Tenant {
   events       Event[]
   logs         Log[]
   alerts       Alert[]
+  scripts      Script[]
 }
 
 model User {
@@ -307,4 +308,25 @@ model Alert {
   @@index([read])
   @@index([resolved])
   @@index([severity])
+}
+
+model Script {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  type         String   @default("provision") // provision | preset
+  channel      String   @default("inform")    // inform | bootstrap | default
+  precondition String?  // MongoDB-like query condition string
+  script       String?  // Raw GenieACS script text
+  actions      Json?    // Parsed actions array [{type, path, value, tag, ...}]
+  enabled      Boolean  @default(true)
+  tenantId     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([channel])
+  @@index([type])
+  @@index([enabled])
 }

@@ -1,0 +1,18 @@
+[
+{"_id":"default","weight":0,"channel":"default","precondition":"","events":"","provision":"default","provisionArgs":""}
+,{"_id":"bootstrap","weight":0,"channel":"bootstrap","events":"0 BOOTSTRAP","precondition":"","provision":"bootstrap","provisionArgs":""}
+,{"_id":"inform","weight":0,"channel":"inform","precondition":"","events":"","provision":"inform","provisionArgs":""}
+,{"_id":"FWUPgrade_AC10_Hard_V3.1","channel":"inform","weight":0,"events":"1 BOOT","precondition":"DeviceID.ProductClass = \"AC10\" AND InternetGatewayDevice.DeviceInfo.HardwareVersion = \"V3.1\" AND InternetGatewayDevice.DeviceInfo.SoftwareVersion <> \"V16.03.06.14_multi_BR01\"","provision":"FWUPgrade_AC10_Hard_V3.1","provisionArgs":""}
+,{"_id":"FWUPgrade_EG8145V5","channel":"inform","weight":0,"events":"1 BOOT","precondition":"DeviceID.ProductClass = \"EG8145V5-V2\" AND InternetGatewayDevice.DeviceInfo.SoftwareVersion <> \"V5R021C00S210\"","provision":"FWUPgrade_EG8145V5-V2","provisionArgs":""}
+,{"_id":"FWUPgrade_EG8145X6","channel":"inform","weight":0,"precondition":"DeviceID.ProductClass = \"EG8145X6\" AND InternetGatewayDevice.DeviceInfo.HardwareVersion = \"22AD.A\" AND InternetGatewayDevice.DeviceInfo.SoftwareVersion <> \"V5R022C00S258\"","events":"","provision":"FWUPgrade_EG8145X6","provisionArgs":""}
+,{"_id":"FWUPgrade_MP_G421R","channel":"inform","weight":0,"events":"1 BOOT","precondition":"DeviceID.ProductClass = \"MP_G421R\" AND InternetGatewayDevice.DeviceInfo.HardwareVersion = \"RT274CX\" AND (InternetGatewayDevice.DeviceInfo.SoftwareVersion = \"V1.3.3\" OR InternetGatewayDevice.DeviceInfo.SoftwareVersion = \"V1.3.2\")","provision":"FWUPgrade_MP_G421R","provisionArgs":""}
+,{"_id":"FWUPgrade_MP_X421RQ-F","channel":"inform","weight":0,"events":"1 BOOT","precondition":"DeviceID.ProductClass = \"MP_X421RQ_F\" AND InternetGatewayDevice.DeviceInfo.SoftwareVersion <> \"V4.0.8-220930\"","provision":"FWUPgrade_MP-X421RQ-F","provisionArgs":""}
+,{"_id":"FWUPgrade_UN1200X","channel":"inform","weight":0,"events":"1 BOOT","precondition":"DeviceID.ProductClass = \"UN1200X-AC\" AND InternetGatewayDevice.DeviceInfo.HardwareVersion = \"V1.1\" AND (InternetGatewayDevice.DeviceInfo.SoftwareVersion = \"V1.2.4\" OR InternetGatewayDevice.DeviceInfo.SoftwareVersion = \"V1.1.7\" OR InternetGatewayDevice.DeviceInfo.SoftwareVersion = \"V1.1.4\")","provision":"FWUPgrade_UN1200X","provisionArgs":""}
+,{"_id":"TrocaOLT","channel":"inform","weight":0,"events":"1 BOOT","precondition":"Tags.OLT IS NOT NULL OR Tags.olt IS NOT NULL","provision":"TrocaOLT","provisionArgs":""}
+,{"_id":"TrocaPadrao","channel":"inform","weight":0,"events":"1 BOOT","precondition":"Tags.troca IS NOT NULL OR Tags.TROCA IS NOT NULL OR Tags.trocar IS NOT NULL","provision":"TrocaPadrao","provisionArgs":""}
+,{"_id":"gatilho_tag_reboot","channel":"inform","weight":0,"precondition":"Tags.REBOOT IS NOT NULL OR Tags.reboot IS NOT NULL","events":"","provision":"reboot","provisionArgs":""}
+,{"_id":"gatilho_tag_summon","channel":"inform","weight":0,"precondition":"Tags.SUMMON IS NOT NULL OR Tags.summon IS NOT NULL","events":"","provision":"summon","provisionArgs":""}
+,{"_id":"informeVirtual","channel":"inform","weight":0,"precondition":"Tags.ignorar IS NULL","events":"","provision":"informeVirtual","provisionArgs":""}
+,{"_id":"testeAndre","channel":"inform","weight":0,"precondition":"Tags.colaborador IS NOT NULL","events":"","provision":"testeAndre","provisionArgs":""}
+,{"_id":"testeCPE","channel":"inform","weight":0,"precondition":"Tags.wan3 IS NOT NULL OR Tags.teste IS NOT NULL","events":"","provision":"testeAndre","provisionArgs":""}
+]
