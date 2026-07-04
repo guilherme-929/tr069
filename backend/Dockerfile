@@ -19,7 +19,7 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl wget
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
@@ -28,4 +28,4 @@ COPY package.json ./
 
 EXPOSE 3000 7547
 
-CMD ["node", "dist/main"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss --skip-generate && node dist/main"]
