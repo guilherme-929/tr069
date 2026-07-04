@@ -129,11 +129,4 @@ export class AcsController {
     return this.cwmpService.handleGetDiscoveryStatus(id);
   }
 
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.TECHNICIAN)
-  @Get('api/devices/:id/connected-devices')
-  connectedDevices(@Param('id') id: string) {
-    return this.cwmpService.handleGetConnectedDevices(id);
-  }
 }
