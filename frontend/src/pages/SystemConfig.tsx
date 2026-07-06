@@ -30,7 +30,7 @@ export default function SystemConfig() {
   const loadConfigs = async () => {
     try {
       const params = category ? `?category=${category}` : '';
-      const { data } = await api.get(`/api/config${params}`);
+      const { data } = await api.get(`/config${params}`);
       setConfigs(data);
     } catch (err: any) {
       setMessage('Failed to load configs');
@@ -43,7 +43,7 @@ export default function SystemConfig() {
   const addConfig = async () => {
     if (!newKey.trim()) return;
     try {
-      await api.post('/api/config', { key: newKey, value: newValue, category: newCategory, description: newDescription });
+      await api.post('/config', { key: newKey, value: newValue, category: newCategory, description: newDescription });
       setMessage('Config created');
       setNewKey(''); setNewValue(''); setNewDescription('');
       loadConfigs();
@@ -54,7 +54,7 @@ export default function SystemConfig() {
 
   const updateConfig = async (id: string) => {
     try {
-      await api.patch(`/api/config/${id}`, { value: editValue });
+      await api.patch(`/config/${id}`, { value: editValue });
       setMessage('Config updated');
       setEditingId(null);
       loadConfigs();
@@ -66,7 +66,7 @@ export default function SystemConfig() {
   const deleteConfig = async (id: string) => {
     if (!confirm('Delete this config entry?')) return;
     try {
-      await api.delete(`/api/config/${id}`);
+      await api.delete(`/config/${id}`);
       setMessage('Config deleted');
       loadConfigs();
     } catch (err: any) {
