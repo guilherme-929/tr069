@@ -289,20 +289,23 @@ export class CwmpService {
       }
     }
 
-    // Execute matching GenieACS-style provision scripts
+    // Execute matching GenieACS-style presets (which link to provisions)
     try {
       const channel = eventCodeStr.includes('BOOTSTRAP') ? 'bootstrap'
         : eventCodeStr.includes('BOOT') ? 'default'
         : 'inform';
-      const matchingScripts = await this.scriptsService.getScriptsForChannel(device.tenantId, channel);
-      for (const script of matchingScripts) {
-        if (this.scriptsService.evaluatePrecondition(script.precondition, device)) {
-          this.logger.log(`Executing script "${script.name}" for device ${serial} (channel: ${channel})`);
-          await this.scriptsService.executeScript(script.id, device.id, device.tenantId);
+      await this.scriptsService.executePresets(device.tenantId, device.id, channel, device);
+
+      // Also execute standalone provisions (those without presets)
+      const provisions = await this.scriptsService.getScriptsForChannel(device.tenantId, channel);
+      for (const prov of provisions) {
+        if (this.scriptsService.evaluatePrecondition(prov.precondition, device)) {
+          this.logger.log(`Executing provision "${prov.name}" for device ${serial} (channel: ${channel})`);
+          await this.scriptsService.executeScript(prov.id, device.id, device.tenantId);
         }
       }
     } catch (err: any) {
-      this.logger.error(`Error executing scripts for device ${serial}: ${err.message}`);
+      this.logger.error(`Error executing presets for device ${serial}: ${err.message}`);
     }
 
     const pendingCount = await this.prisma.task.count({

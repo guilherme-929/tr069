@@ -52,7 +52,14 @@ export class ScriptsService {
 
   async getScriptsForChannel(tenantId: string, channel: string) {
     return this.prisma.script.findMany({
-      where: { tenantId, channel, enabled: true },
+      where: { tenantId, channel, enabled: true, type: 'provision' },
+    });
+  }
+
+  async getPresetsForChannel(tenantId: string, channel: string) {
+    return this.prisma.script.findMany({
+      where: { tenantId, channel, enabled: true, type: 'preset' },
+      orderBy: { name: 'asc' },
     });
   }
 
@@ -114,12 +121,40 @@ export class ScriptsService {
     return true;
   }
 
+  async executePresets(tenantId: string, deviceId: string, channel: string, device: any) {
+    const presets = await this.getPresetsForChannel(tenantId, channel);
+    for (const preset of presets) {
+      if (!this.evaluatePrecondition(preset.precondition, device)) continue;
+      const provisionName = preset.script;
+      if (!provisionName) {
+        this.logger.warn(`Preset "${preset.name}" has no provision target`);
+        continue;
+      }
+      this.logger.log(`Preset "${preset.name}" → executing provision "${provisionName}" for device ${deviceId}`);
+      await this.executeScriptByName(provisionName, deviceId, tenantId);
+    }
+  }
+
   async executeScript(scriptId: string, deviceId: string, tenantId: string) {
     const script = await this.prisma.script.findUnique({ where: { id: scriptId } });
     if (!script || !script.enabled) return;
 
     this.logger.log(`Executing script "${script.name}" for device ${deviceId}`);
 
+    if (script.actions && Array.isArray(script.actions)) {
+      for (const action of script.actions as unknown as ScriptAction[]) {
+        await this.executeAction(action, deviceId, tenantId);
+      }
+    }
+  }
+
+  async executeScriptByName(name: string, deviceId: string, tenantId: string) {
+    const script = await this.prisma.script.findUnique({ where: { name } });
+    if (!script || !script.enabled) {
+      this.logger.warn(`Provision "${name}" not found or disabled`);
+      return;
+    }
+    this.logger.log(`Executing provision "${name}" for device ${deviceId}`);
     if (script.actions && Array.isArray(script.actions)) {
       for (const action of script.actions as unknown as ScriptAction[]) {
         await this.executeAction(action, deviceId, tenantId);

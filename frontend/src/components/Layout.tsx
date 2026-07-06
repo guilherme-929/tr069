@@ -20,6 +20,7 @@ import {
   FileJson,
   ScrollText,
   Eye,
+  GitBranch,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -33,6 +34,7 @@ const navItems = [
   { icon: Terminal, label: 'Logs', path: '/logs' },
   { icon: Bell, label: 'Alertas', path: '/alerts' },
   { icon: SettingsIcon, label: 'Configurações', path: '/settings' },
+  { icon: GitBranch, label: 'Presets', path: '/presets' },
   { icon: Eye, label: 'Virtual Params', path: '/virtual-params' },
   { icon: ScrollText, label: 'Provisions', path: '/provisions' },
   { icon: FileJson, label: 'System Config', path: '/system-config' },

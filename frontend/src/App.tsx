@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import SystemConfig from './pages/SystemConfig';
 import Provisions from './pages/Provisions';
 import VirtualParams from './pages/VirtualParams';
+import Presets from './pages/Presets';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="system-config" element={<SystemConfig />} />
         <Route path="provisions" element={<Provisions />} />
         <Route path="virtual-params" element={<VirtualParams />} />
+        <Route path="presets" element={<Presets />} />
       </Route>
     </Routes>
   );
