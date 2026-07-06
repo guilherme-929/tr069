@@ -3,6 +3,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { PrismaService } from '../common/prisma.service';
 import { CwmpService } from './cwmp.service';
+import { ConfigService } from '../system-config/config.service';
 
 interface CwmpSession {
   serial: string;
@@ -23,6 +24,7 @@ export class AcsService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private cwmp: CwmpService,
+    private configService: ConfigService,
   ) {}
 
   onModuleInit() {
@@ -46,7 +48,7 @@ export class AcsService implements OnModuleInit {
   }
 
   private async handleCwmpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-    if (!this.validateAuth(req, res)) return;
+    if (!await this.validateAuth(req, res)) return;
 
     let body = '';
     req.on('data', (chunk) => (body += chunk));
@@ -249,7 +251,7 @@ export class AcsService implements OnModuleInit {
     this.sessions.delete(serial);
   }
 
-  private validateAuth(req: http.IncomingMessage, res: http.ServerResponse): boolean {
+  private async validateAuth(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Basic ')) {
       res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
@@ -268,8 +270,12 @@ export class AcsService implements OnModuleInit {
 
     const username = decoded.slice(0, colonIndex);
     const password = decoded.slice(colonIndex + 1);
-    const expectedUser = process.env.ACS_AUTH_USERNAME || 'alemnet';
-    const expectedPass = process.env.ACS_AUTH_PASSWORD || 'alemnet';
+
+    // Try ConfigService first, then env vars
+    const configUser = await this.configService.getValue('default', 'acs.default.username');
+    const configPass = await this.configService.getValue('default', 'acs.default.password');
+    const expectedUser = configUser || process.env.ACS_AUTH_USERNAME || 'alemnet';
+    const expectedPass = configPass || process.env.ACS_AUTH_PASSWORD || 'alemnet';
 
     if (username !== expectedUser || password !== expectedPass) {
       this.logger.warn(`CWMP auth failed for user: ${username}`);

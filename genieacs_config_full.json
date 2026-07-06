@@ -1,0 +1,264 @@
+[
+{"_id":"ui.device.2.parameters.0.components.2.type","value":"'summon-button'"}
+,{"_id":"ui.index.6.label","value":"'V.Wifi-2G'"}
+,{"_id":"ui.index.6.parameter","value":"VirtualParameters.vWifi-2G"}
+,{"_id":"ui.overview.charts.online.label","value":"'Online status'"}
+,{"_id":"ui.overview.charts.online.slices.1_onlineNow.color","value":"'#31a354'"}
+,{"_id":"ui.overview.charts.online.slices.1_onlineNow.filter","value":"Events.Inform > NOW() - 12 * 60 * 1000"}
+,{"_id":"ui.overview.charts.online.slices.1_onlineNow.label","value":"'Online now'"}
+,{"_id":"ui.overview.charts.online.slices.2_past24.color","value":"'#9ecae1'"}
+,{"_id":"ui.overview.charts.online.slices.2_past24.filter","value":"Events.Inform > (NOW() - 12 * 60 * 1000) - (24 * 60 * 60 * 1000) AND Events.Inform < (NOW() - 12 * 60 * 1000)"}
+,{"_id":"ui.overview.charts.online.slices.2_past24.label","value":"'Past 24 hours'"}
+,{"_id":"ui.overview.charts.online.slices.3_others.color","value":"'#FF6666'"}
+,{"_id":"ui.overview.charts.online.slices.3_others.filter","value":"Events.Inform < (NOW() - 13 * 60 * 1000) - (24 * 60 * 60 * 1000)"}
+,{"_id":"ui.overview.charts.online.slices.3_others.label","value":"'OffLine'"}
+,{"_id":"ui.filters.0.label","value":"'Serial number'"}
+,{"_id":"ui.filters.0.type","value":"'string'"}
+,{"_id":"ui.filters.1.label","value":"'MODELO'"}
+,{"_id":"ui.filters.1.parameter","value":"DeviceID.ProductClass"}
+,{"_id":"ui.device.4.type","value":"'parameter-table'"}
+,{"_id":"ui.device.0.type","value":"'tags'"}
+,{"_id":"ui.device.1.type","value":"'ping'"}
+,{"_id":"ui.device.2.type","value":"'parameter-list'"}
+,{"_id":"ui.device.2.parameters.0.element","value":"'span.inform'"}
+,{"_id":"ui.device.2.parameters.0.components.1.type","value":"'overview-dot'"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.5","value":"InternetGatewayDevice.LANDevice.*.Hosts.Host.*.HostName"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.3","value":"InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.SSID"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.7","value":"InternetGatewayDevice.LANDevice.*.Hosts.Host.*.MACAddress"}
+,{"_id":"ui.device.2.parameters.1.parameter","value":"VirtualParameters.vLoginPPPoE"}
+,{"_id":"ui.device.2.parameters.3.parameter","value":"VirtualParameters.vIP_Voip"}
+,{"_id":"ui.filters.0.parameter","value":"DeviceID.SerialNumber"}
+,{"_id":"ui.device.2.parameters.5.parameter","value":"VirtualParameters.vWifi-5G"}
+,{"_id":"ui.device.2.parameters.6.parameter","value":"DeviceID.SerialNumber"}
+,{"_id":"ui.device.2.parameters.8.label","value":"'OUI'"}
+,{"_id":"ui.device.2.parameters.9.label","value":"\"Fabricante\""}
+,{"_id":"ui.device.3.type","value":"'parameter-table'"}
+,{"_id":"ui.device.3.childParameters.0.label","value":"'Host name'"}
+,{"_id":"ui.device.3.childParameters.1.parameter","value":"IPAddress"}
+,{"_id":"ui.filters.2.label","value":"'Tag'"}
+,{"_id":"ui.filters.2.type","value":"'tag'"}
+,{"_id":"ui.index.0.label","value":"'Serial number'"}
+,{"_id":"ui.index.0.components.0.type","value":"'parameter'"}
+,{"_id":"ui.device.2.parameters.0.type","value":"'container'"}
+,{"_id":"ui.index.2.parameter","value":"InternetGatewayDevice.DeviceInfo.SoftwareVersion"}
+,{"_id":"ui.device.2.parameters.0.label","value":"'Last inform'"}
+,{"_id":"ui.index.5.parameter","value":"VirtualParameters.vIP_Voip"}
+,{"_id":"ui.device.2.parameters.0.components.0.type","value":"'parameter'"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.1","value":"InternetGatewayDevice.DeviceInfo.SoftwareVersion"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.8","value":"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.AssociatedDevice"}
+,{"_id":"ui.device.2.parameters.1.label","value":"'V.LoginPPPoe'"}
+,{"_id":"ui.device.2.parameters.2.parameter","value":"VirtualParameters.vWAN1_IP"}
+,{"_id":"ui.device.2.parameters.2.label","value":"'v.vWAN1_IP'"}
+,{"_id":"ui.device.2.parameters.4.parameter","value":"VirtualParameters.vWifi-2G"}
+,{"_id":"ui.device.2.parameters.5.label","value":"'v.Wifi-5G'"}
+,{"_id":"ui.device.2.parameters.7.parameter","value":"DeviceID.ProductClass"}
+,{"_id":"ui.device.2.parameters.9.parameter","value":"DeviceID.Manufacturer"}
+,{"_id":"ui.device.2.parameters.10.parameter","value":"InternetGatewayDevice.DeviceInfo.HardwareVersion"}
+,{"_id":"ui.filters.1.type","value":"'string'"}
+,{"_id":"ui.device.3.label","value":"'LAN hosts'"}
+,{"_id":"ui.device.3.parameter","value":"InternetGatewayDevice.LANDevice.1.Hosts.Host"}
+,{"_id":"ui.device.3.childParameters.0.parameter","value":"HostName"}
+,{"_id":"ui.device.3.childParameters.2.parameter","value":"MACAddress"}
+,{"_id":"ui.device.5.type","value":"'parameter-table'"}
+,{"_id":"ui.index.0.type","value":"'device-link'"}
+,{"_id":"ui.index.1.parameter","value":"DeviceID.ProductClass"}
+,{"_id":"ui.index.2.label","value":"'Sof V.'"}
+,{"_id":"ui.index.3.parameter","value":"VirtualParameters.vLoginPPPoE"}
+,{"_id":"ui.index.4.parameter","value":"VirtualParameters.vIP_WAN"}
+,{"_id":"ui.device.2.parameters.0.components.1.chart","value":"'online'"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.0","value":"InternetGatewayDevice.DeviceInfo.HardwareVersion"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.6","value":"InternetGatewayDevice.LANDevice.*.Hosts.Host.*.IPAddress"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.4","value":"InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.KeyPassphrase"}
+,{"_id":"ui.device.2.parameters.0.parameter","value":"DATE_STRING(Events.Inform)"}
+,{"_id":"ui.device.2.parameters.4.label","value":"'v.Wifi-2G'"}
+,{"_id":"ui.device.2.parameters.6.label","value":"'Serial number'"}
+,{"_id":"ui.device.2.parameters.7.label","value":"'Product class'"}
+,{"_id":"ui.device.2.parameters.8.parameter","value":"DeviceID.OUI"}
+,{"_id":"ui.device.3.childParameters.2.label","value":"'MAC address'"}
+,{"_id":"ui.index.1.label","value":"'Model'"}
+,{"_id":"ui.index.3.label","value":"'V.LoginPPPoe'"}
+,{"_id":"ui.index.4.label","value":"'V.IP_WAN'"}
+,{"_id":"ui.index.5.label","value":"'V.IP_VOIP'"}
+,{"_id":"ui.device.2.parameters.10.label","value":"'Hardware version'"}
+,{"_id":"ui.device.6.type","value":"'parameter-table'"}
+,{"_id":"ui.index.0.parameter","value":"DeviceID.SerialNumber"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.2","value":"InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ExternalIPAddress"}
+,{"_id":"ui.device.2.parameters.3.label","value":"'v.IP_Voip'"}
+,{"_id":"ui.device.3.childParameters.1.label","value":"'IP address'"}
+,{"_id":"ui.overview.groups.Group2.color","value":"'#23422'"}
+,{"_id":"ui.overview.groups.Group1.charts.0","value":"'online'"}
+,{"_id":"ui.overview.groups.Group1.charts.1","value":"'versao'"}
+,{"_id":"ui.overview.groups.Group1.charts.2","value":"'TAGs'"}
+,{"_id":"ui.overview.groups.Group1.charts.3","value":"'Novos'"}
+,{"_id":"ui.overview.groups.Group2.label","value":"'OUTROS'"}
+,{"_id":"ui.overview.groups.Group1.label","value":"\"DEV ATENCAO # DEV ATENCAO\""}
+,{"_id":"ui.overview.groups.Group2.charts.0","value":"'viaOLT'"}
+,{"_id":"ui.overview.groups.Group1.charts.4","value":"'viaOLT'"}
+,{"_id":"ui.overview.charts.Novos.label","value":"'Novos CPEs'"}
+,{"_id":"ui.overview.charts.viaOLT.slices.OLTP1.filter","value":"InternetGatewayDevice.ManagementServer.Username = \"OLTP1\""}
+,{"_id":"ui.overview.charts.viaOLT.slices.OLTP1.label","value":"'CPEs via OLTP1'"}
+,{"_id":"ui.overview.charts.Novos.slices.1_past24.filter","value":"Events.Registered > (NOW() - 5 * 60 * 1000) - (24 * 60 * 60 * 1000)"}
+,{"_id":"ui.overview.charts.Novos.slices.1_past24.color","value":"'#2ca02c'"}
+,{"_id":"ui.overview.charts.Novos.slices.1_past24.label","value":"'Ativos nas últimas 24hr'"}
+,{"_id":"ui.overview.charts.viaOLT.label","value":"'OLTs'"}
+,{"_id":"ui.overview.charts.viaOLT.slices.OLTP1.color","value":"'#2ca02c'"}
+,{"_id":"ui.overview.charts.online.slices.5_Abandono.color","value":"'#808080'"}
+,{"_id":"ui.overview.charts.online.slices.5_Abandono.filter","value":"Events.Inform <= NOW() - 144 * 60 * 60 * 1000"}
+,{"_id":"ui.overview.charts.online.slices.5_Abandono.label","value":"'Abandono'"}
+,{"_id":"ui.overview.charts.TAGs.label","value":"'Tags'"}
+,{"_id":"ui.overview.charts.TAGs.slices.Colaboradores.color","value":"'#9467bd'"}
+,{"_id":"ui.overview.charts.TAGs.slices.Colaboradores.label","value":"'Colaboradores'"}
+,{"_id":"ui.overview.charts.TAGs.slices.Colaboradores.filter","value":"Tags.colaboradores IS NOT NULL OR Tags.Colaboradores IS NOT NULL OR Tags.colaborador IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.INTERNOS.color","value":"'#1f75b5'"}
+,{"_id":"ui.overview.charts.TAGs.slices.INTERNOS.label","value":"'INTERNOS'"}
+,{"_id":"ui.overview.charts.TAGs.slices.INTERNOS.filter","value":"Tags.internos IS NOT NULL OR Tags.internos IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.OLT.filter","value":"Tags.olt IS NOT NULL OR Tags.OLT IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.OLT.color","value":"'#20c997'"}
+,{"_id":"ui.overview.charts.TAGs.slices.OLT.label","value":"'OLT'"}
+,{"_id":"ui.overview.charts.TAGs.slices.POPs.color","value":"'#ff7f0e'"}
+,{"_id":"ui.overview.charts.TAGs.slices.POPs.filter","value":"Tags.pop IS NOT NULL OR Tags.POP IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.POPs.label","value":"'POPs'"}
+,{"_id":"ui.overview.charts.TAGs.slices.URLs.filter","value":"Tags.url IS NOT NULL OR Tags.URL IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.URLs.color","value":"'#1f88b4'"}
+,{"_id":"ui.overview.charts.TAGs.slices.URLs.label","value":"'URL'"}
+,{"_id":"ui.overview.charts.TAGs.slices.dns.color","value":"'#2ca02c'"}
+,{"_id":"ui.overview.charts.TAGs.slices.dns.filter","value":"Tags.dns IS NOT NULL OR Tags.DNS IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.dns.label","value":"'DNS'"}
+,{"_id":"ui.overview.charts.TAGs.slices.exColaboradores.color","value":"'#d62728'"}
+,{"_id":"ui.overview.charts.TAGs.slices.exColaboradores.label","value":"'exColaboradores'"}
+,{"_id":"ui.overview.charts.TAGs.slices.exColaboradores.filter","value":"Tags.exColaboradores IS NOT NULL OR Tags.exColaboradores IS NOT NULL OR Tags.exColaborador IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.nat25.color","value":"'#1f77b4'"}
+,{"_id":"ui.overview.charts.TAGs.slices.nat25.filter","value":"Tags.nat25 IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.nat25.label","value":"'nat25'"}
+,{"_id":"ui.overview.charts.TAGs.slices.teste.color","value":"'#1f77b4'"}
+,{"_id":"ui.overview.charts.TAGs.slices.tomany.filter","value":"Tags.tomany IS NOT NULL OR Tags.toomany IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.tomany.color","value":"'#1f77b4'"}
+,{"_id":"ui.overview.charts.TAGs.slices.teste.filter","value":"Tags.teste IS NOT NULL OR Tags.Teste IS NOT NULL"}
+,{"_id":"ui.overview.charts.TAGs.slices.teste.label","value":"'Teste'"}
+,{"_id":"ui.overview.charts.TAGs.slices.tomany.label","value":"'TooMany - query'"}
+,{"_id":"ui.overview.charts.versao.label","value":"'MODELOS CPE'"}
+,{"_id":"ui.overview.charts.versao.slices.1_MPX_Stavix.color","value":"'#e83e8c'"}
+,{"_id":"ui.overview.charts.versao.slices.1_MPX_Stavix.filter","value":"DeviceID.ProductClass = \"MP_X421RQ_F\" OR DeviceID.ProductClass = \"MP_X421R\""}
+,{"_id":"ui.overview.charts.versao.slices.1_UNI1200.color","value":"'#1f77b4'"}
+,{"_id":"ui.overview.charts.versao.slices.1_MPX_Stavix.label","value":"'MPX Stavix'"}
+,{"_id":"ui.overview.charts.versao.slices.1_UNI1200.filter","value":"DeviceID.ProductClass = \"UN1200X-AC\""}
+,{"_id":"ui.overview.charts.versao.slices.1_UNI1200.label","value":"'UNI1200 - UNEE'"}
+,{"_id":"ui.overview.charts.versao.slices.2_MPG_Stavix.color","value":"'#6c757d'"}
+,{"_id":"ui.overview.charts.versao.slices.2_MPG_Stavix.filter","value":"DeviceID.ProductClass = \"MP_G421R\" OR DeviceID.ProductClass = \"MP_G421RQ\""}
+,{"_id":"ui.overview.charts.versao.slices.2_MPG_Stavix.label","value":"'MPG Stavix'"}
+,{"_id":"ui.overview.charts.versao.slices.2_MPX_Stavix.filter","value":"DeviceID.ProductClass = \"MP_X421RQ_F\" OR DeviceID.ProductClass = \"MP_X421R\""}
+,{"_id":"ui.overview.charts.versao.slices.2_MPX_Stavix.label","value":"'MPX Stavix'"}
+,{"_id":"ui.overview.charts.versao.slices.2_MPX_Stavix.color","value":"'#e377c2'"}
+,{"_id":"ui.overview.charts.versao.slices.3_MPG_Stavix.color","value":"'#7f7f7f'"}
+,{"_id":"ui.overview.charts.versao.slices.3_MPG_Stavix.filter","value":"DeviceID.ProductClass = \"MP_G421R\" OR DeviceID.ProductClass = \"MP_G421RQ\""}
+,{"_id":"ui.overview.charts.versao.slices.4_EG8145V5-V2.color","value":"'#ff7f0e'"}
+,{"_id":"ui.overview.charts.versao.slices.3_MPG_Stavix.label","value":"'MPG Stavix'"}
+,{"_id":"ui.overview.charts.versao.slices.3_UNI1200.label","value":"'UNI1200 - UNEE'"}
+,{"_id":"ui.overview.charts.versao.slices.3_UNI1200.color","value":"'#6610f2'"}
+,{"_id":"ui.overview.charts.versao.slices.3_UNI1200.filter","value":"DeviceID.ProductClass = \"UN1200X-AC\""}
+,{"_id":"ui.overview.charts.versao.slices.4_EG8145V5-V2.filter","value":"DeviceID.ProductClass = \"EG8145V5-V2\""}
+,{"_id":"ui.overview.charts.versao.slices.4_EG8145V5-V2.label","value":"'EG8145V5-V2'"}
+,{"_id":"ui.overview.charts.versao.slices.5_Huawei-2G.filter","value":"DeviceID.ProductClass = \"EG8141A5\" OR DeviceID.ProductClass = \"HG8546M\" OR DeviceID.ProductClass = \"HG8546M-RMS\" OR DeviceID.ProductClass = \"HG8546M5\""}
+,{"_id":"ui.overview.charts.versao.slices.5_Huawei-2G.color","value":"'#9467bd'"}
+,{"_id":"ui.overview.charts.versao.slices.5_Huawei-2G.label","value":"'Huawei - 2G'"}
+,{"_id":"ui.overview.charts.versao.slices.6_ROTEADOR_5G.color","value":"'#bcbd22'"}
+,{"_id":"ui.overview.charts.versao.slices.6_ROTEADOR_5G.filter","value":"DeviceID.ProductClass = \"AC10\""}
+,{"_id":"ui.overview.charts.versao.slices.6_ROTEADOR_5G.label","value":"'ROTEADOR 5G'"}
+,{"_id":"ui.overview.charts.versao.slices.7_Huawei-AX.color","value":"'#d62728'"}
+,{"_id":"ui.overview.charts.versao.slices.7_Huawei-AX.filter","value":"DeviceID.ProductClass = \"EG8145X6\""}
+,{"_id":"ui.overview.charts.versao.slices.8_FORA_PADRAO.color","value":"'#bcbd22'"}
+,{"_id":"ui.overview.charts.versao.slices.7_Huawei-AX.label","value":"'Huawei-wifi6'"}
+,{"_id":"ui.overview.charts.versao.slices.8_FORA_PADRAO.filter","value":"DeviceID.ProductClass = \"HS8145V\" OR DeviceID.ProductClass = \"G-140W-C\" OR DeviceID.ProductClass = \"HG9\" OR DeviceID.ProductClass = \"HS8546V5\" OR DeviceID.ProductClass = \"EG8145V5\" OR DeviceID.ProductClass = \"HS8545M5\""}
+,{"_id":"ui.overview.charts.versao.slices.998_HOMOLOGACAO.filter","value":"DeviceID.ProductClass = \"F670L\" OR DeviceID.ProductClass = \"DM986-414\""}
+,{"_id":"ui.overview.charts.versao.slices.998_HOMOLOGACAO.color","value":"'#17becf'"}
+,{"_id":"ui.overview.charts.versao.slices.998_HOMOLOGACAO.label","value":"'HOMOLOGACAO'"}
+,{"_id":"ui.overview.charts.versao.slices.999_ERRROS.color","value":"'#000000'"}
+,{"_id":"ui.overview.charts.versao.slices.8_FORA_PADRAO.label","value":"'FORA PADRAO'"}
+,{"_id":"ui.overview.charts.versao.slices.999_ERRROS.label","value":"'ERRROS'"}
+,{"_id":"ui.overview.charts.versao.slices.999_ERRROS.filter","value":"DeviceID.ProductClass = \"DISCOVERYSERVICE\""}
+,{"_id":"ui.filters.3.type","value":"'string'"}
+,{"_id":"ui.filters.3.parameter","value":"VirtualParameters.vLoginPPPoE"}
+,{"_id":"ui.filters.3.label","value":"'Login'"}
+,{"_id":"ui.index.7.label","value":"'V.Wifi-5G'"}
+,{"_id":"ui.index.7.parameter","value":"VirtualParameters.vWifi-5G"}
+,{"_id":"ui.index.8.parameter","value":"InternetGatewayDevice.DeviceInfo.HardwareVersion"}
+,{"_id":"ui.index.8.label","value":"'Hard V.'"}
+,{"_id":"ui.index.9.element","value":"'span.inform'"}
+,{"_id":"ui.index.9.label","value":"'Last inform'"}
+,{"_id":"ui.index.9.parameter","value":"DATE_STRING(Events.Inform)"}
+,{"_id":"ui.index.9.type","value":"'container'"}
+,{"_id":"ui.index.9.components.0.type","value":"'parameter'"}
+,{"_id":"ui.index.9.components.1.chart","value":"'online'"}
+,{"_id":"ui.index.10.label","value":"'Tags'"}
+,{"_id":"ui.index.9.components.1.type","value":"'overview-dot'"}
+,{"_id":"ui.index.10.parameter","value":"Tags"}
+,{"_id":"ui.index.10.type","value":"'tags'"}
+,{"_id":"ui.index.10.unsortable","value":"true"}
+,{"_id":"ui.index.10.writable","value":"false"}
+,{"_id":"ui.device.2.parameters.0.components.2.parameters.9","value":"InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.AssociatedDevice"}
+,{"_id":"ui.device.2.parameters.11.label","value":"'Software version'"}
+,{"_id":"ui.device.2.parameters.11.parameter","value":"InternetGatewayDevice.DeviceInfo.SoftwareVersion"}
+,{"_id":"ui.device.2.parameters.12.label","value":"'WLAN-2G passphrase'"}
+,{"_id":"ui.device.2.parameters.12.parameter","value":"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase"}
+,{"_id":"ui.device.2.parameters.13.label","value":"'WLAN-5G passphrase'"}
+,{"_id":"ui.device.2.parameters.13.parameter","value":"InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase"}
+,{"_id":"cwmp.auth","value":"AUTH(\"alemnet\", \"bf2fef2d-4c7d-45ab-be80-2699d5eada11\")"}
+,{"_id":"ui.device.4.parameter","value":"InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.AssociatedDevice"}
+,{"_id":"ui.device.4.childParameters.0.label","value":"'Host name'"}
+,{"_id":"ui.device.4.label","value":"'DEVICES CONECTADOS 2.4GHz'"}
+,{"_id":"ui.device.7.type","value":"'container'"}
+,{"_id":"ui.device.4.childParameters.0.parameter","value":"X_ZTE-COM_AssociatedDeviceName"}
+,{"_id":"ui.device.5.parameter","value":"InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.AssociatedDevice"}
+,{"_id":"ui.device.5.childParameters.0.label","value":"'Host name'"}
+,{"_id":"ui.device.5.childParameters.1.label","value":"'MAC address'"}
+,{"_id":"ui.device.5.childParameters.0.parameter","value":"X_ZTE-COM_AssociatedDeviceName"}
+,{"_id":"ui.device.5.childParameters.2.parameter","value":"AssociatedDeviceBandWidth"}
+,{"_id":"ui.device.5.childParameters.3.label","value":"'SINAL'"}
+,{"_id":"ui.device.5.childParameters.3.parameter","value":"X_ZTE-COM_SignalStrength"}
+,{"_id":"ui.device.5.childParameters.4.label","value":"'WLAN NOISE'"}
+,{"_id":"ui.device.5.childParameters.4.parameter","value":"X_ZTE-COM_WLAN_Noise"}
+,{"_id":"ui.device.5.childParameters.5.label","value":"'FREQUENCIA'"}
+,{"_id":"ui.device.5.label","value":"'DEVICES CONECTADOS 5GHz'"}
+,{"_id":"ui.device.5.childParameters.2.label","value":"'BandWidth'"}
+,{"_id":"ui.device.7.element","value":"'div'"}
+,{"_id":"ui.device.5.childParameters.1.parameter","value":"AssociatedDeviceMACAddress"}
+,{"_id":"ui.device.5.childParameters.5.parameter","value":"X_ZTE-COM_WLAN_Radio"}
+,{"_id":"ui.device.7.components.0.element","value":"'h3'"}
+,{"_id":"ui.device.7.components.0.type","value":"'container'"}
+,{"_id":"ui.device.7.components.0.components.0","value":"'Faults'"}
+,{"_id":"ui.device.7.components.1.type","value":"'device-faults'"}
+,{"_id":"ui.device.8.type","value":"'container'"}
+,{"_id":"ui.device.4.childParameters.1.label","value":"'MAC address'"}
+,{"_id":"ui.device.4.childParameters.2.label","value":"'BandWidth'"}
+,{"_id":"ui.device.4.childParameters.1.parameter","value":"AssociatedDeviceMACAddress"}
+,{"_id":"ui.device.4.childParameters.2.parameter","value":"AssociatedDeviceBandWidth"}
+,{"_id":"ui.device.4.childParameters.3.parameter","value":"X_ZTE-COM_SignalStrength"}
+,{"_id":"ui.device.4.childParameters.5.label","value":"'FREQUENCIA'"}
+,{"_id":"ui.device.4.childParameters.4.label","value":"'WLAN NOISE'"}
+,{"_id":"ui.device.4.childParameters.4.parameter","value":"X_ZTE-COM_WLAN_Noise"}
+,{"_id":"ui.device.4.childParameters.5.parameter","value":"X_ZTE-COM_WLAN_Radio"}
+,{"_id":"ui.device.4.childParameters.3.label","value":"'SINAL'"}
+,{"_id":"ui.device.6.parameter","value":"InternetGatewayDevice.LANDevice.1.WLANConfiguration"}
+,{"_id":"ui.device.6.label","value":"'Interface WiFi2G/5G'"}
+,{"_id":"ui.device.6.childParameters.0.label","value":"'SSID'"}
+,{"_id":"ui.device.6.childParameters.0.parameter","value":"SSID"}
+,{"_id":"ui.device.6.childParameters.2.label","value":"'BANDA'"}
+,{"_id":"ui.device.6.childParameters.1.label","value":"'CANAL'"}
+,{"_id":"ui.device.6.childParameters.1.parameter","value":"Channel"}
+,{"_id":"ui.device.6.childParameters.2.parameter","value":"Standard"}
+,{"_id":"ui.device.6.childParameters.3.label","value":"'STATUS'"}
+,{"_id":"ui.device.6.childParameters.4.parameter","value":"X_ZTE-COM_WLAN_SupportedFrequencyBands"}
+,{"_id":"ui.device.6.childParameters.3.parameter","value":"Status"}
+,{"_id":"ui.device.6.childParameters.4.label","value":"'FREQUENCIA'"}
+,{"_id":"ui.device.6.childParameters.5.label","value":"'DEVICES ASSOCIADOS'"}
+,{"_id":"ui.device.6.childParameters.5.parameter","value":"TotalAssociations"}
+,{"_id":"ui.device.8.element","value":"'div.container-full-width'"}
+,{"_id":"ui.device.8.components.1.type","value":"'all-parameters'"}
+,{"_id":"ui.device.9.type","value":"'device-actions'"}
+,{"_id":"ui.device.8.components.0.type","value":"'container'"}
+,{"_id":"ui.device.8.components.0.components.0","value":"'All parameters'"}
+,{"_id":"ui.device.8.components.0.element","value":"'h3'"}
+,{"_id":"ui.overview.charts.versao.slices.9_ZTE-F670L.color","value":"'#d62728'"}
+,{"_id":"ui.overview.charts.versao.slices.9_ZTE-F670L.filter","value":"DeviceID.ProductClass = \"F670L\""}
+,{"_id":"ui.overview.charts.versao.slices.9_ZTE-F670L.label","value":"'F670L'"}
+]
