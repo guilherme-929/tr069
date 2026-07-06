@@ -258,13 +258,14 @@ export class CwmpService {
     const expectedAcsUrl = `${acsUrl}/cwmp`;
     const currentAcsUrl = paramMap['Device.ManagementServer.URL']
       || paramMap['InternetGatewayDevice.ManagementServer.URL']
+      || paramMap['ManagementServer.URL']
       || '';
 
-    if (currentAcsUrl !== expectedAcsUrl && currentAcsUrl !== '0.0.0.0') {
-      const existingPending = await this.prisma.task.count({
-        where: { deviceId: device.id, status: 'PENDING', type: 'Provision' },
+    if (currentAcsUrl && currentAcsUrl !== expectedAcsUrl && currentAcsUrl !== '0.0.0.0') {
+      const existingActive = await this.prisma.task.count({
+        where: { deviceId: device.id, status: { in: ['PENDING', 'IN_PROGRESS'] }, type: 'Provision' },
       });
-      if (existingPending === 0) {
+      if (existingActive === 0) {
         const informInterval = await this.configService.getValue('default', 'cwmp.inform.interval') || '300';
         const periodicInformEnable = await this.configService.getValue('default', 'device.default.periodicInformEnable') || 'true';
         this.logger.log(`Auto-provisioning device ${serial} — ACS URL mismatch: "${currentAcsUrl}" !== "${expectedAcsUrl}"`);
@@ -898,14 +899,15 @@ export class CwmpService {
   }
 
   async buildCwmpCommand(task: any, deviceId: string): Promise<string> {
+    const wrap = (xml: string) => `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
     switch (task.type) {
       case 'Reboot':
-        return this.builder.build(this.buildSoapResponse('Reboot', { CommandKey: task.id }));
+        return wrap(this.builder.build(this.buildSoapResponse('Reboot', { CommandKey: task.id })));
       case 'FactoryReset':
-        return this.builder.build(this.buildSoapResponse('FactoryReset', { CommandKey: task.id }));
+        return wrap(this.builder.build(this.buildSoapResponse('FactoryReset', { CommandKey: task.id })));
       case 'Download': {
         const payload = task.payload as any;
-        return this.builder.build(
+        return wrap(this.builder.build(
           this.buildSoapResponse('Download', {
             CommandKey: task.id,
             FileType: payload?.fileType || '1 Firmware Upgrade Image',
@@ -918,27 +920,27 @@ export class CwmpService {
             SuccessURL: '',
             FailureURL: '',
           }),
-        );
+        ));
       }
       case 'GetParameterNames': {
         const payload = task.payload as any;
         const paramPath = payload?.parameterPath || '';
         const nextLevel = payload?.nextLevel ?? true;
-        return this.builder.build(
+        return wrap(this.builder.build(
           this.buildSoapResponse('GetParameterNames', {
             ParameterPath: paramPath,
             NextLevel: nextLevel,
           }),
-        );
+        ));
       }
       case 'GetParameterValues': {
         const payload = task.payload as any;
         const names = payload?.names || ['Device.DeviceInfo.*'];
-        return this.builder.build(
+        return wrap(this.builder.build(
           this.buildSoapResponse('GetParameterValues', {
             ParameterNames: { string: names },
           }),
-        );
+        ));
       }
       case 'SetParameterValues':
       case 'Provision': {
@@ -947,7 +949,7 @@ export class CwmpService {
           ? Object.entries(payload.parameters as Record<string, string>).map(([name, value]) => ({ name, value }))
           : (payload?.params || []);
         if (params.length === 0) return this.buildEmptySoapEnvelope();
-        return this.builder.build(
+        return wrap(this.builder.build(
           this.buildSoapResponse('SetParameterValues', {
             ParameterList: {
               ParameterValueStruct: params.map((p: any) => ({
@@ -957,7 +959,7 @@ export class CwmpService {
             },
             ParameterKey: task.id,
           }),
-        );
+        ));
       }
       default:
         return this.buildEmptySoapEnvelope();

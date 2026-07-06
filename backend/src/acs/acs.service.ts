@@ -101,9 +101,75 @@ export class AcsService implements OnModuleInit {
 
         if (xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse')) {
           const infoSerial = serial || '';
-          const session = this.sessions.get(infoSerial);
-          if (session && session.pendingTasks && session.pendingTasks.length > 0) {
-            this.logger.log(`Device ${infoSerial} has ${session.pendingTasks.length} pending tasks after Inform`);
+          if (infoSerial) {
+            const dev = await this.prisma.device.findUnique({ where: { serial: infoSerial } });
+            if (dev) {
+              const pendingTasks = await this.prisma.task.findMany({
+                where: { deviceId: dev.id, status: 'PENDING' },
+                orderBy: { createdAt: 'asc' },
+              });
+              if (pendingTasks.length > 0) {
+                let session = this.sessions.get(infoSerial);
+                if (!session) {
+                  session = { serial: infoSerial, deviceId: dev.id, state: 'READY', pendingTasks: [], currentTaskIndex: 0, tenantId: dev.tenantId || '' };
+                  this.sessions.set(infoSerial, session);
+                }
+                session.pendingTasks = pendingTasks;
+                session.currentTaskIndex = 0;
+                session.state = 'READY';
+                session.deviceId = dev.id;
+                session.tenantId = dev.tenantId || session.tenantId;
+                this.logger.log(`Device ${infoSerial} has ${pendingTasks.length} pending tasks — session set to READY`);
+              } else {
+                const session = this.sessions.get(infoSerial);
+                if (session) {
+                  session.pendingTasks = [];
+                  session.currentTaskIndex = 0;
+                }
+              }
+            }
+          }
+        }
+
+        // After any task response, if more tasks remain, send next immediately
+        if (serial && (
+          xmlResponse.includes('SetParameterValuesResponse') ||
+          xmlResponse.includes('GetParameterValuesResponse') ||
+          xmlResponse.includes('GetParameterNamesResponse') ||
+          xmlResponse.includes('DownloadResponse')
+        )) {
+          let deviceId = this.sessions.get(serial)?.deviceId || '';
+          if (!deviceId) {
+            const dev = await this.prisma.device.findUnique({ where: { serial } });
+            if (dev) deviceId = dev.id;
+          }
+          if (deviceId) {
+            const remaining = await this.prisma.task.findMany({
+              where: { deviceId, status: 'PENDING' },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (remaining.length > 0) {
+              let session = this.sessions.get(serial);
+              if (!session) {
+                session = { serial, deviceId, state: 'READY', pendingTasks: [], currentTaskIndex: 0, tenantId: '' };
+                this.sessions.set(serial, session);
+              }
+              session.pendingTasks = remaining;
+              session.currentTaskIndex = 0;
+              session.state = 'READY';
+              session.deviceId = deviceId;
+              this.logger.log(`Device ${serial} has ${remaining.length} pending tasks after response — sending next command`);
+              const task = remaining[0];
+              const commandXml = await this.cwmp.buildCwmpCommand(task, deviceId);
+              session.state = 'SENDING';
+              await this.prisma.task.update({
+                where: { id: task.id },
+                data: { status: 'IN_PROGRESS' },
+              });
+              res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
+              res.end(commandXml);
+              return;
+            }
           }
         }
 
@@ -211,9 +277,8 @@ export class AcsService implements OnModuleInit {
         });
       } else {
         const session = this.sessions.get(serial)!;
-        if (session.pendingTasks.length === 0) {
-          session.state = 'INFORMED';
-        }
+        // Always reset to INFORMED on new Inform — tasks reloaded from DB below
+        session.state = 'INFORMED';
       }
     }
 
