@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower, Monitor, Signal, SignalHigh } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower, Monitor, Signal, SignalHigh, ChevronRight, ChevronDown } from 'lucide-react';
 
 const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Clients', 'Discovery', 'Logs'] as const;
 type Tab = typeof tabs[number];
@@ -22,6 +22,16 @@ export default function Devices() {
   const [connectedDevices, setConnectedDevices] = useState<any[]>([]);
   const [virtualParamsLoading, setVirtualParamsLoading] = useState(false);
   const [connectedDevicesLoading, setConnectedDevicesLoading] = useState(false);
+  const [paramSearch, setParamSearch] = useState('');
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (path: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path); else next.add(path);
+      return next;
+    });
+  };
 
   useEffect(() => {
     const params: any = { page, limit: 10 };
@@ -516,18 +526,97 @@ export default function Devices() {
 
             {activeTab === 'TR-069 Params' && (
               <section>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Device Parameters</h4>
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-[500px] overflow-y-auto space-y-1">
-                  {selected.parameters && typeof selected.parameters === 'object' && !Array.isArray(selected.parameters) && Object.keys(selected.parameters).length > 0
-                    ? Object.entries(selected.parameters as Record<string, string>).map(([key, val]) => (
-                        <p key={key} className="text-slate-600 dark:text-slate-400 break-all">
-                          <span className="text-primary">{key}</span>
-                          <span className="text-slate-300"> = </span>
-                          <span className="text-slate-900 dark:text-white">{String(val)}</span>
-                        </p>
-                      ))
-                    : <p className="text-slate-400 italic">No parameters available</p>
-                  }
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">All Parameters</h4>
+                  {selected.parameters && typeof selected.parameters === 'object' && (
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {Object.keys(selected.parameters).filter(k => !k.startsWith('__')).length} params
+                    </span>
+                  )}
+                </div>
+                <div className="relative mb-3">
+                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Filter parameters..."
+                    value={paramSearch}
+                    onChange={e => setParamSearch(e.target.value)}
+                    className="w-full pl-7 pr-3 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-[500px] overflow-y-auto">
+                  {(() => {
+                    const params = selected.parameters && typeof selected.parameters === 'object' && !Array.isArray(selected.parameters)
+                      ? (selected.parameters as Record<string, string>) : {};
+                    const entries = Object.entries(params).filter(([k]) => !k.startsWith('__'));
+                    const filtered = paramSearch
+                      ? entries.filter(([k, v]) => k.toLowerCase().includes(paramSearch.toLowerCase()) || String(v).toLowerCase().includes(paramSearch.toLowerCase()))
+                      : entries;
+                    if (filtered.length === 0) {
+                      return <p className="p-3 text-slate-400 italic">
+                        {paramSearch ? 'No matching parameters' : 'No parameters available'}
+                      </p>;
+                    }
+
+                    // Build tree from flat paths
+                    interface TreeNode {
+                      name: string;
+                      path: string;
+                      children: Record<string, TreeNode>;
+                      value?: string;
+                    }
+                    const root: Record<string, TreeNode> = {};
+                    for (const [key, val] of filtered) {
+                      const parts = key.split('.');
+                      let level = root;
+                      let acc = '';
+                      for (let i = 0; i < parts.length; i++) {
+                        const part = parts[i];
+                        acc += (acc ? '.' : '') + part;
+                        if (i === parts.length - 1) {
+                          level[part] = { name: part, path: acc, children: {}, value: val };
+                        } else {
+                          if (!level[part]) level[part] = { name: part, path: acc, children: {} };
+                          level = level[part].children;
+                        }
+                      }
+                    }
+
+                    const renderTree = (nodes: Record<string, TreeNode>, depth: number): React.ReactNode[] => {
+                      return Object.entries(nodes).sort(([a], [b]) => a.localeCompare(b)).map(([name, node]) => {
+                        const hasChildren = Object.keys(node.children).length > 0;
+                        const isExpanded = expandedSections.has(node.path);
+                        if (hasChildren) {
+                          return (
+                            <div key={node.path}>
+                              <button
+                                onClick={() => toggleSection(node.path)}
+                                className="flex items-center gap-1 w-full text-left px-3 py-1 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                                style={{ paddingLeft: `${12 + depth * 14}px` }}
+                              >
+                                {isExpanded ? <ChevronDown size={10} className="text-slate-400 flex-shrink-0" /> : <ChevronRight size={10} className="text-slate-400 flex-shrink-0" />}
+                                <span className="text-slate-500 font-semibold">{node.path}</span>
+                              </button>
+                              {isExpanded && renderTree(node.children, depth + 1)}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div
+                            key={node.path}
+                            className="flex items-center gap-2 px-3 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+                            style={{ paddingLeft: `${12 + depth * 14}px` }}
+                          >
+                            <span className="text-primary break-all">{node.path}</span>
+                            <span className="text-slate-300 flex-shrink-0">=</span>
+                            <span className="text-slate-900 dark:text-white break-all min-w-0">{String(node.value)}</span>
+                          </div>
+                        );
+                      });
+                    };
+
+                    return <div className="py-1">{renderTree(root, 0)}</div>;
+                  })()}
                 </div>
               </section>
             )}
