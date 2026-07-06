@@ -19,6 +19,7 @@ export class AcsService implements OnModuleInit {
   private readonly logger = new Logger(AcsService.name);
   private server!: http.Server;
   private sessions = new Map<string, CwmpSession>();
+  private serialByIp = new Map<string, string>();
   private cachedTenantId: string | null = null;
 
   constructor(
@@ -51,16 +52,27 @@ export class AcsService implements OnModuleInit {
     if (!await this.validateAuth(req, res)) return;
 
     let body = '';
+    const clientIp = req.socket?.remoteAddress || req.headers['x-forwarded-for'] as string || '';
     req.on('data', (chunk) => (body += chunk));
     req.on('end', async () => {
       try {
-        const serial = this.resolveDeviceSerial(req, body);
+        let serial = this.resolveDeviceSerial(req, body);
         const bodyLen = (body || '').length;
 
         const contentType = req.headers['content-type'] || '';
         const isSoap = contentType.includes('text/xml') || contentType.includes('application/soap') || body.includes('<soap:Envelope') || body.includes('<soapenv:Envelope') || body.includes('<SOAP-ENV:Envelope');
 
-        this.logger.log(`CWMP req from ${serial || 'unknown'}: method=${req.method}, content-type=${contentType}, bodyLen=${bodyLen}, isSoap=${isSoap}`);
+        // If serial couldn't be resolved from body, try IP-based lookup
+        if (!serial || serial === process.env.ACS_AUTH_USERNAME || serial === 'alemnet') {
+          serial = this.serialByIp.get(clientIp) || serial || '';
+        }
+
+        this.logger.log(`CWMP req from ${serial || 'unknown'} (ip=${clientIp}): method=${req.method}, content-type=${contentType}, bodyLen=${bodyLen}, isSoap=${isSoap}`);
+
+        // Update IP→serial mapping when we have a real serial from body
+        if (serial && isSoap && (body.includes('<Inform>') || body.includes('<cwmp:Inform>'))) {
+          this.serialByIp.set(clientIp, serial);
+        }
 
         if (!body || body.trim().length === 0 || !isSoap) {
           await this.handleCpeReady(serial || '', res);
