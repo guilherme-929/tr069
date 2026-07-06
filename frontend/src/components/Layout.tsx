@@ -19,6 +19,7 @@ import {
   Settings as SettingsIcon,
   FileJson,
   ScrollText,
+  Eye,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -32,6 +33,7 @@ const navItems = [
   { icon: Terminal, label: 'Logs', path: '/logs' },
   { icon: Bell, label: 'Alertas', path: '/alerts' },
   { icon: SettingsIcon, label: 'Configurações', path: '/settings' },
+  { icon: Eye, label: 'Virtual Params', path: '/virtual-params' },
   { icon: ScrollText, label: 'Provisions', path: '/provisions' },
   { icon: FileJson, label: 'System Config', path: '/system-config' },
 ];

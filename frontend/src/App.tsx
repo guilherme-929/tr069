@@ -12,6 +12,7 @@ import Alerts from './pages/Alerts';
 import Settings from './pages/Settings';
 import SystemConfig from './pages/SystemConfig';
 import Provisions from './pages/Provisions';
+import VirtualParams from './pages/VirtualParams';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="settings" element={<Settings />} />
         <Route path="system-config" element={<SystemConfig />} />
         <Route path="provisions" element={<Provisions />} />
+        <Route path="virtual-params" element={<VirtualParams />} />
       </Route>
     </Routes>
   );
