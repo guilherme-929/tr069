@@ -40,7 +40,7 @@ export class CwmpService {
     return tenant.id;
   }
 
-  async handleCwmp(xmlString: string, serial?: string, getSession?: () => any): Promise<string> {
+  async handleCwmp(xmlString: string, serial?: string, getSession?: () => any, clientIp?: string): Promise<string> {
     if (!xmlString || !xmlString.trim()) {
       return this.buildEmptySoapEnvelope();
     }
@@ -59,7 +59,7 @@ export class CwmpService {
       const bodyKeys = Object.keys(body);
 
       if (body['cwmp:Inform'] || body['Inform']) {
-        return await this.handleInform(body, serial);
+        return await this.handleInform(body, serial, clientIp);
       }
 
       if (body['cwmp:TransferComplete'] || body['TransferComplete']) {
@@ -110,7 +110,7 @@ export class CwmpService {
     }
   }
 
-  private async handleInform(data: any, serialFromAuth?: string): Promise<string> {
+  private async handleInform(data: any, serialFromAuth?: string, clientIp?: string): Promise<string> {
     const inform = data?.['cwmp:Inform'] || data?.Inform;
     if (!inform) return this.buildFaultResponse('Client', 'Invalid Inform message');
 
@@ -140,11 +140,18 @@ export class CwmpService {
       }
     }
 
-    const ipAddress = inform.DeviceId?.IPAddress
+    const cleanClientIp = clientIp ? clientIp.replace(/^.*:/, '') : '';
+    const privateIpRegex = /^(0\.0\.0\.0|\[::\]|localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\.)/;
+    
+    const reportedIp = inform.DeviceId?.IPAddress
       || paramMap['Device.IP.Interface.1.IPv4Address']
       || paramMap['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress']
       || paramMap['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress']
       || '';
+
+    const ipAddress = (reportedIp && !privateIpRegex.test(reportedIp)) ? reportedIp : (cleanClientIp || reportedIp || '');
+    const wanIp = cleanClientIp || reportedIp || '';
+
     const firmwareVersion = paramMap['Device.DeviceInfo.SoftwareVersion']
       || paramMap['InternetGatewayDevice.DeviceInfo.SoftwareVersion']
       || '';
@@ -154,9 +161,27 @@ export class CwmpService {
     const uptime = parseInt(
       paramMap['Device.DeviceInfo.UpTime'] || paramMap['InternetGatewayDevice.DeviceInfo.UpTime'] || '0', 10
     );
-    const connectionRequestUrl = paramMap['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
+
+    let connectionRequestUrl = paramMap['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
       || paramMap['Device.ManagementServer.ConnectionRequestURL']
       || '';
+
+    if (connectionRequestUrl && (cleanClientIp || ipAddress)) {
+      const targetIp = cleanClientIp || ipAddress;
+      try {
+        const urlObj = new URL(connectionRequestUrl);
+        if (privateIpRegex.test(urlObj.hostname) && !privateIpRegex.test(targetIp)) {
+          urlObj.hostname = targetIp;
+          connectionRequestUrl = urlObj.toString();
+        }
+      } catch (e) {
+        if (connectionRequestUrl.includes('0.0.0.0')) {
+          connectionRequestUrl = connectionRequestUrl.replace('0.0.0.0', targetIp);
+        } else if (connectionRequestUrl.includes('[::]')) {
+          connectionRequestUrl = connectionRequestUrl.replace('[::]', targetIp);
+        }
+      }
+    }
 
     if (device) {
       device = await this.prisma.device.update({
@@ -165,6 +190,7 @@ export class CwmpService {
           status: 'ONLINE',
           mac: mac || device.mac,
           ipAddress: ipAddress || device.ipAddress,
+          wanIp: wanIp || device.wanIp,
           manufacturer: manufacturer || device.manufacturer,
           modelName: modelName || device.modelName,
           firmwareVersion: firmwareVersion || device.firmwareVersion,
@@ -204,6 +230,7 @@ export class CwmpService {
             hardwareVersion,
             status: 'ONLINE',
             ipAddress,
+            wanIp,
             connectionRequestUrl: connectionRequestUrl || undefined,
             lastInform: new Date(),
             lastContact: new Date(),
@@ -378,9 +405,35 @@ export class CwmpService {
       }
       updatedParams.__discovered__ = { ...discovered, _values: updatedValues };
 
+      let connectionRequestUrl = paramMap['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
+        || paramMap['Device.ManagementServer.ConnectionRequestURL'];
+
+      if (connectionRequestUrl) {
+        const ipAddress = device.ipAddress;
+        if (ipAddress) {
+          const privateIpRegex = /^(0\.0\.0\.0|\[::\]|localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\.)/;
+          try {
+            const urlObj = new URL(connectionRequestUrl);
+            if (privateIpRegex.test(urlObj.hostname) && !privateIpRegex.test(ipAddress)) {
+              urlObj.hostname = ipAddress;
+              connectionRequestUrl = urlObj.toString();
+            }
+          } catch (e) {
+            if (connectionRequestUrl.includes('0.0.0.0')) {
+              connectionRequestUrl = connectionRequestUrl.replace('0.0.0.0', ipAddress);
+            } else if (connectionRequestUrl.includes('[::]')) {
+              connectionRequestUrl = connectionRequestUrl.replace('[::]', ipAddress);
+            }
+          }
+        }
+      }
+
       await this.prisma.device.update({
         where: { id: device.id },
-        data: { parameters: updatedParams as any },
+        data: {
+          parameters: updatedParams as any,
+          ...(connectionRequestUrl && { connectionRequestUrl }),
+        },
       });
 
       // Check if discovery is complete
