@@ -12,7 +12,7 @@ export class TenantService {
         id: true, name: true, slug: true,
         acsUsername: true, acsPassword: true,
         acsPublicUrl: true, connectionRequestEnabled: true,
-        defaultWiFiConfig: true, defaultScripts: true,
+        defaultWiFiConfig: true,
       },
     });
     if (!tenant) throw new NotFoundException('Tenant not found');
@@ -72,20 +72,4 @@ export class TenantService {
     });
   }
 
-  async updateDefaultScripts(
-    tenantId: string,
-    data: { scripts: Array<{ name: string; params: Record<string, string> }> },
-  ) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
-    if (!tenant) throw new NotFoundException('Tenant not found');
-
-    return this.prisma.tenant.update({
-      where: { id: tenantId },
-      data: { defaultScripts: data.scripts },
-      select: {
-        id: true, name: true, slug: true,
-        defaultScripts: true,
-      },
-    });
-  }
 }

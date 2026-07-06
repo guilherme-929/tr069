@@ -47,12 +47,4 @@ export class TenantController {
     return this.tenantService.updateWiFiConfig(tenantId, body);
   }
 
-  @Roles(Role.ADMIN)
-  @Patch('default-scripts')
-  updateDefaultScripts(
-    @CurrentUser('tenantId') tenantId: string,
-    @Body() body: { scripts: Array<{ name: string; params: Record<string, string> }> },
-  ) {
-    return this.tenantService.updateDefaultScripts(tenantId, body);
-  }
 }

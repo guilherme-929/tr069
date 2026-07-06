@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { ConfigService } from '../system-config/config.service';
 
 @Injectable()
 export class ProvisioningService {
   private readonly logger = new Logger(ProvisioningService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) {}
 
   async provisionDevice(deviceId: string, tenantId: string, template?: any) {
     const device = await this.prisma.device.findUnique({
@@ -21,11 +25,16 @@ export class ProvisioningService {
       || process.env.ACS_PUBLIC_URL
       || `http://localhost:${process.env.ACS_PORT || '7547'}`;
 
+    const informInterval = await this.configService.getValue('default', 'cwmp.inform.interval') || '300';
+    const periodicInformEnable = await this.configService.getValue('default', 'device.default.periodicInformEnable') || 'true';
+
     const paramsWithCr: Record<string, string> = {
       ...defaultParams,
       'Device.ManagementServer.URL': defaultParams['Device.ManagementServer.URL'] || `${acsUrl}/cwmp`,
-      'Device.ManagementServer.PeriodicInformInterval': defaultParams['Device.ManagementServer.PeriodicInformInterval'] || '60',
-      'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': defaultParams['InternetGatewayDevice.ManagementServer.PeriodicInformInterval'] || '60',
+      'Device.ManagementServer.PeriodicInformInterval': defaultParams['Device.ManagementServer.PeriodicInformInterval'] || informInterval,
+      'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': defaultParams['InternetGatewayDevice.ManagementServer.PeriodicInformInterval'] || informInterval,
+      'Device.ManagementServer.PeriodicInformEnable': periodicInformEnable,
+      'InternetGatewayDevice.ManagementServer.PeriodicInformEnable': periodicInformEnable,
     };
 
     const wifiConfig = (device.tenant.defaultWiFiConfig as Record<string, string>) || {};
@@ -36,12 +45,9 @@ export class ProvisioningService {
       paramsWithCr['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] = wifiConfig.password;
     }
 
-    const defaultScripts = (device.tenant.defaultScripts as Array<{ name: string; params: Record<string, string> }>) || [];
-    for (const script of defaultScripts) {
-      if (script.params) {
-        Object.assign(paramsWithCr, script.params);
-      }
-    }
+    // Read parameter overrides from System Config (prefix: provision.param.)
+    const provisionParams = await this.configService.getByPrefix(tenantId, 'provision.param.');
+    Object.assign(paramsWithCr, provisionParams);
 
     const task = await this.prisma.task.create({
       data: {

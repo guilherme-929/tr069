@@ -322,6 +322,9 @@ export class AcsService implements OnModuleInit {
     const password = device.connectionRequestPassword || device.serial;
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
 
+    const rawTimeout = await this.configService.getValue('default', 'cwmp.connectionRequestTimeout') || '2000';
+    const timeoutMs = parseInt(rawTimeout, 10) || 2000;
+
     return new Promise((resolve, reject) => {
       const parsedUrl = new URL(targetUrl);
       const client = parsedUrl.protocol === 'https:' ? https : http;
@@ -331,7 +334,7 @@ export class AcsService implements OnModuleInit {
         port: parsedUrl.port,
         path: parsedUrl.pathname + parsedUrl.search,
         method: 'GET',
-        timeout: 10000,
+        timeout: timeoutMs,
         headers: {
           'Authorization': `Basic ${auth}`,
         },

@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import { WebsocketGateway } from '../websocket/websocket.gateway';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { ScriptsService } from '../scripts/scripts.service';
+import { ConfigService } from '../system-config/config.service';
 
 @Injectable()
 export class CwmpService {
@@ -27,6 +28,7 @@ export class CwmpService {
     private prisma: PrismaService,
     private ws: WebsocketGateway,
     private scriptsService: ScriptsService,
+    private configService: ConfigService,
   ) {}
 
   private async resolveTenantId(): Promise<string> {
@@ -263,6 +265,8 @@ export class CwmpService {
         where: { deviceId: device.id, status: 'PENDING', type: 'Provision' },
       });
       if (existingPending === 0) {
+        const informInterval = await this.configService.getValue('default', 'cwmp.inform.interval') || '300';
+        const periodicInformEnable = await this.configService.getValue('default', 'device.default.periodicInformEnable') || 'true';
         this.logger.log(`Auto-provisioning device ${serial} — ACS URL mismatch: "${currentAcsUrl}" !== "${expectedAcsUrl}"`);
         await this.prisma.task.create({
           data: {
@@ -272,9 +276,11 @@ export class CwmpService {
             payload: {
               parameters: {
                 'Device.ManagementServer.URL': expectedAcsUrl,
-                'Device.ManagementServer.PeriodicInformInterval': '60',
+                'Device.ManagementServer.PeriodicInformInterval': informInterval,
+                'Device.ManagementServer.PeriodicInformEnable': periodicInformEnable,
                 'InternetGatewayDevice.ManagementServer.URL': expectedAcsUrl,
-                'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': '60',
+                'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': informInterval,
+                'InternetGatewayDevice.ManagementServer.PeriodicInformEnable': periodicInformEnable,
               },
             },
             tenantId: device.tenantId,

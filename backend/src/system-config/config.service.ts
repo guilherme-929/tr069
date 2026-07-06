@@ -18,6 +18,18 @@ export class ConfigService {
     return this.prisma.config.findUnique({ where: { id } });
   }
 
+  async getByPrefix(tenantId: string, prefix: string): Promise<Record<string, string>> {
+    const configs = await this.prisma.config.findMany({
+      where: { tenantId, key: { startsWith: prefix } },
+    });
+    const result: Record<string, string> = {};
+    for (const c of configs) {
+      const suffix = c.key.slice(prefix.length);
+      result[suffix] = c.value;
+    }
+    return result;
+  }
+
   async getValue(tenantId: string, key: string): Promise<string | null> {
     const cached = this.cache.get(tenantId)?.[key];
     if (cached !== undefined) return cached;
