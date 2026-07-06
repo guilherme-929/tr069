@@ -377,37 +377,69 @@ export default function Devices() {
           <div className="flex-1 overflow-y-auto p-5 space-y-6">
             {activeTab === 'Overview' && (
               <>
+                {/* Tags */}
+                {selected.tags?.length > 0 && (
+                  <section>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selected.tags.map((tag: string) => (
+                        <span key={tag} className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">{tag}</span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Device Info - 2 columns */}
                 <section>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">System Information</h4>
-                  <div className="space-y-3">
-                    {[
-                      { label: 'Uptime', value: uptime(selected.uptime) },
-                      { label: 'MAC Address', value: selected.mac },
-                      { label: 'IP Address', value: selected.ipAddress || '-' },
-                      { label: 'WAN IP', value: selected.wanIp || '-' },
-                      { label: 'Firmware', value: selected.firmwareVersion || '-' },
-                      { label: 'Hardware', value: selected.model?.hwVersion || '-' },
-                      { label: 'Client', value: selected.client?.name || '-' },
-                      { label: 'Plan', value: selected.client?.plan || '-' },
-                      { label: 'Last Contact', value: fmt(selected.lastContact) },
-                      { label: 'Last Inform', value: fmt(selected.lastInform) },
-                    ].map(f => (
-                      <div key={f.label} className="flex justify-between items-center py-1 border-b border-slate-50 dark:border-slate-800/50">
-                        <span className="text-sm text-slate-500">{f.label}</span>
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white">{f.value}</span>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Device Info</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                      <div className="space-y-2">
+                        {[
+                          { label: 'Serial', value: selected.serial },
+                          { label: 'Product Class', value: selected.productClass || '-' },
+                          { label: 'OUI', value: selected.oui || '-' },
+                          { label: 'Manufacturer', value: selected.manufacturer || '-' },
+                          { label: 'Model', value: selected.modelName || '-' },
+                          { label: 'Hardware', value: selected.model?.hwVersion || '-' },
+                          { label: 'Firmware', value: selected.firmwareVersion || '-' },
+                        ].map(f => (
+                          <div key={f.label} className="flex justify-between items-center">
+                            <span className="text-[11px] text-slate-500">{f.label}</span>
+                            <span className="text-[11px] font-semibold text-slate-900 dark:text-white font-mono">{f.value}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                      <div className="space-y-2">
+                        {[
+                          { label: 'MAC Address', value: selected.mac },
+                          { label: 'IP Address', value: selected.ipAddress || '-' },
+                          { label: 'WAN IP', value: selected.wanIp || '-' },
+                          { label: 'Uptime', value: uptime(selected.uptime) },
+                          { label: 'Client', value: selected.client?.name || '-' },
+                          { label: 'Plan', value: selected.client?.plan || '-' },
+                          { label: 'Last Inform', value: fmt(selected.lastInform) },
+                        ].map(f => (
+                          <div key={f.label} className="flex justify-between items-center">
+                            <span className="text-[11px] text-slate-500">{f.label}</span>
+                            <span className="text-[11px] font-semibold text-slate-900 dark:text-white font-mono">{f.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </section>
 
+                {/* Virtual Parameters */}
                 {virtualParams && (
                   <section>
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Virtual Parameters</h4>
                     <div className="grid grid-cols-2 gap-2">
-                      {Object.entries(virtualParams).map(([key, val]) => (
+                      {Object.entries(virtualParams).filter(([k]) => !['wifiBands'].includes(k)).map(([key, val]) => (
                         <div key={key} className="p-2.5 bg-gradient-to-r from-slate-50 to-blue-50/30 dark:from-slate-800/50 dark:to-blue-950/20 rounded-lg border border-slate-100 dark:border-slate-700/50">
                           <div className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">{key}</div>
-                          <div className="text-sm font-bold text-slate-900 dark:text-white font-mono">{String(val)}</div>
+                          <div className="text-sm font-bold text-slate-900 dark:text-white font-mono">{String(val || '-')}</div>
                         </div>
                       ))}
                     </div>
@@ -415,21 +447,27 @@ export default function Devices() {
                 )}
                 {virtualParamsLoading && (
                   <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Virtual Parameters</h4>
-                    <p className="text-sm text-slate-400 italic">Loading...</p>
+                    <p className="text-sm text-slate-400 italic">Loading virtual parameters...</p>
                   </section>
                 )}
 
-                {selected.events?.length > 0 && (
+                {/* WiFi Bands Summary */}
+                {virtualParams?.wifiBands?.length > 0 && (
                   <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Events</h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {selected.events.slice(0, 10).map((ev: any) => (
-                        <div key={ev.id} className="flex gap-3">
-                          <div className="w-2 h-2 mt-1.5 bg-success rounded-full flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{ev.code}</p>
-                            <p className="text-xs text-slate-400">{fmt(ev.createdAt)}</p>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">WiFi Interfaces</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {virtualParams.wifiBands.map((wb: any, i: number) => (
+                        <div key={i} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Wifi size={14} className="text-primary" />
+                            <span className="text-sm font-bold text-slate-900 dark:text-white">{wb.ssid}</span>
+                            <span className="text-[10px] text-slate-400 ml-auto">{wb.band}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1 text-[11px]">
+                            <span className="text-slate-500">Channel:</span><span className="font-mono text-slate-800 dark:text-slate-200">{wb.channel || '-'}</span>
+                            <span className="text-slate-500">Status:</span><span className="font-mono text-slate-800 dark:text-slate-200">{wb.status || '-'}</span>
+                            <span className="text-slate-500">Standard:</span><span className="font-mono text-slate-800 dark:text-slate-200">{wb.standard || '-'}</span>
+                            <span className="text-slate-500">Clients:</span><span className="font-mono text-slate-800 dark:text-slate-200">{wb.associations || '0'}</span>
                           </div>
                         </div>
                       ))}
@@ -437,24 +475,42 @@ export default function Devices() {
                   </section>
                 )}
 
-                {selected.tasks?.length > 0 && (
-                  <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Tasks</h4>
-                    <div className="space-y-2">
-                      {selected.tasks.slice(0, 5).map((t: any) => (
-                        <div key={t.id} className="flex items-center gap-2 text-sm">
-                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                            t.status === 'COMPLETED' ? 'bg-success/10 text-success' :
-                            t.status === 'FAILED' ? 'bg-danger/10 text-danger' :
-                            t.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-slate-500'
-                          }`}>{t.status}</span>
-                          <span className="text-slate-900 dark:text-white font-semibold">{t.type}</span>
-                          <span className="text-slate-400 ml-auto text-xs">{fmt(t.createdAt)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
+                {/* Two-column bottom: Events + Tasks */}
+                <div className="grid grid-cols-2 gap-4">
+                  {selected.events?.length > 0 && (
+                    <section>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Events</h4>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {selected.events.slice(0, 8).map((ev: any) => (
+                          <div key={ev.id} className="flex items-center gap-2 py-1">
+                            <div className="w-1.5 h-1.5 bg-success rounded-full flex-shrink-0" />
+                            <span className="text-xs font-medium text-slate-900 dark:text-white truncate">{ev.code}</span>
+                            <span className="text-[10px] text-slate-400 ml-auto">{fmt(ev.createdAt)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {selected.tasks?.length > 0 && (
+                    <section>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recent Tasks</h4>
+                      <div className="space-y-1 max-h-32 overflow-y-auto">
+                        {selected.tasks.slice(0, 8).map((t: any) => (
+                          <div key={t.id} className="flex items-center gap-2 py-1">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              t.status === 'COMPLETED' ? 'bg-success/10 text-success' :
+                              t.status === 'FAILED' ? 'bg-danger/10 text-danger' :
+                              t.status === 'IN_PROGRESS' ? 'bg-warning/10 text-warning' : 'bg-slate-100 text-slate-500'
+                            }`}>{t.status}</span>
+                            <span className="text-xs text-slate-900 dark:text-white truncate">{t.type}</span>
+                            <span className="text-[10px] text-slate-400 ml-auto">{fmt(t.createdAt)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </div>
               </>
             )}
 

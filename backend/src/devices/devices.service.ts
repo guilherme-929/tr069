@@ -98,7 +98,14 @@ export class DevicesService {
   async remove(id: string) {
     const device = await this.prisma.device.findUnique({ where: { id } });
     if (!device) throw new NotFoundException('Device not found');
+
+    await this.prisma.session.deleteMany({ where: { deviceId: id } });
+    await this.prisma.task.deleteMany({ where: { deviceId: id } });
+    await this.prisma.event.deleteMany({ where: { deviceId: id } });
+    await this.prisma.log.deleteMany({ where: { entityId: id } });
+    await this.prisma.alert.deleteMany({ where: { deviceId: id } });
     await this.prisma.device.delete({ where: { id } });
+
     return { message: 'Device removed' };
   }
 
