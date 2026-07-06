@@ -116,6 +116,17 @@ export class AcsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Post('api/devices/:id/fetch-all')
+  fetchAll(
+    @Param('id') id: string,
+    @Body() body: { names?: string[]; connectionRequest?: boolean },
+  ) {
+    return this.cwmpService.handleFetchAllParams(id, body?.names);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
   @Post('api/devices/:id/discover')
   discover(@Param('id') id: string) {
     return this.cwmpService.handleDiscover(id);

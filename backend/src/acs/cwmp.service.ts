@@ -816,6 +816,34 @@ export class CwmpService {
     return { task, message: 'Full parameter discovery queued. Will process on next CPE connection.' };
   }
 
+  async handleFetchAllParams(deviceId: string, paramNames: string[] = ['Device.', 'InternetGatewayDevice.']): Promise<any> {
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error('Device not found');
+
+    const task = await this.prisma.task.create({
+      data: {
+        deviceId,
+        type: 'GetParameterValues',
+        status: 'PENDING',
+        payload: { names: paramNames },
+        tenantId: device.tenantId,
+      },
+    });
+
+    await this.prisma.log.create({
+      data: {
+        action: 'FETCH_PARAMS',
+        entity: 'DEVICE',
+        entityId: deviceId,
+        detail: `Fetching all params (${paramNames.join(', ')}) for ${device.serial}`,
+        deviceId,
+        tenantId: device.tenantId,
+      },
+    });
+
+    return { task, message: `Fetching ${paramNames.length} parameter trees from CPE...` };
+  }
+
   async handleGetDiscoveryStatus(deviceId: string): Promise<any> {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');

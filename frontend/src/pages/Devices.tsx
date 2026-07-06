@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower, Monitor, Signal, SignalHigh, ChevronRight, ChevronDown } from 'lucide-react';
+import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower, Monitor, Signal, SignalHigh, ChevronRight, ChevronDown, Database } from 'lucide-react';
 
 const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Clients', 'Discovery', 'Logs'] as const;
 type Tab = typeof tabs[number];
@@ -357,6 +357,20 @@ export default function Devices() {
                   className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-green-500/30 text-green-600 hover:bg-green-50 transition-colors"
                 >
                   <Radio size={13} /> Verificar WiFi
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const { data } = await api.post(`/devices/${selected.id}/fetch-all`, { names: ['Device.', 'InternetGatewayDevice.'], connectionRequest: true });
+                      alert(data.message + ' Connection request sent to wake up CPE.');
+                    } catch (err: any) {
+                      alert(err.response?.data?.message || 'Failed to fetch parameters');
+                    }
+                  }}
+                  disabled={actionLoading === 'fetch-all'}
+                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-violet-500/30 text-violet-600 hover:bg-violet-50 transition-colors disabled:opacity-40"
+                >
+                  <Database size={13} /> {actionLoading === 'fetch-all' ? '...' : 'Fetch All'}
                 </button>
                 <button
                   onClick={() => deleteDevice(selected.id)}
