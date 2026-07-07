@@ -714,12 +714,36 @@ export class CwmpService {
 
     const instance = Math.min(Math.max(parseInt(String(params.instance ?? 1), 10) || 1, 1), 8);
 
-    const wifiParams = [
-      { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.SSID`, value: params.ssid },
-      { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.KeyPassphrase`, value: params.password },
-      { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
-      { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
-    ];
+    const currentParams = (device.parameters as Record<string, string>) || {};
+    const hasWLAN = Object.keys(currentParams).some((k) =>
+      k.startsWith('InternetGatewayDevice.LANDevice.1.WLANConfiguration.'),
+    );
+    const hasTR181 = Object.keys(currentParams).some((k) => k.startsWith('Device.WiFi.'));
+    const hasZTE = Object.keys(currentParams).some((k) =>
+      k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
+    );
+    const useZTE = hasZTE || (!hasWLAN && !hasTR181);
+
+    let wifiParams: { name: string; value: string }[];
+    if (useZTE) {
+      wifiParams = [
+        { name: `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${instance}.SSID`, value: params.ssid },
+        { name: `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${instance}.Enable`, value: '1' },
+        { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
+        { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.SSID`, value: params.ssid },
+        { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.Enable`, value: '1' },
+      ];
+    } else if (hasTR181) {
+      wifiParams = [
+        { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
+        { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
+      ];
+    } else {
+      wifiParams = [
+        { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.SSID`, value: params.ssid },
+        { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.KeyPassphrase`, value: params.password },
+      ];
+    }
 
     const task = await this.prisma.task.create({
       data: {
@@ -731,7 +755,6 @@ export class CwmpService {
       },
     });
 
-    const currentParams = (device.parameters as Record<string, string>) || {};
     for (const p of wifiParams) {
       currentParams[p.name] = p.value;
     }
@@ -761,35 +784,64 @@ export class CwmpService {
 
     const params = (device.parameters as Record<string, string>) || {};
 
+    // Detect which WiFi namespace this CPE actually exposes. ZTE CPEs (e.g.
+    // F670L) report WiFi under InternetGatewayDevice.LANDevice.1.WIFI.* and
+    // DO NOT implement WLANConfiguration.* nor Device.WiFi.* (TR-181). When a
+    // GetParameterValues request mixes an unsupported path the CPE returns a
+    // SOAP Fault for the WHOLE request, so we must not mix namespaces. We
+    // probe the cached parameters to decide which namespace to query.
+    const hasWLAN = Object.keys(params).some((k) =>
+      k.startsWith('InternetGatewayDevice.LANDevice.1.WLANConfiguration.'),
+    );
+    const hasTR181 = Object.keys(params).some((k) => k.startsWith('Device.WiFi.'));
+    const hasZTE = Object.keys(params).some((k) =>
+      k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
+    );
+
+    // Default to the ZTE WIFI.* namespace (most common for these devices).
+    // Only add WLANConfiguration.* / Device.WiFi.* if the CPE has already
+    // reported params under that namespace, to avoid SOAP Faults.
+    const useWLAN = hasWLAN && !hasZTE;
+    const useTR181 = hasTR181 && !hasZTE;
+    const useZTE = hasZTE || (!hasWLAN && !hasTR181);
+
     const wifiPaths: string[] = [];
     for (let i = 1; i <= 8; i++) {
-      wifiPaths.push(
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.KeyPassphrase`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Enable`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Channel`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Status`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Standard`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.BandWidth`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
-        `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
-        // TR-181 paths — iterate all instances so 5GHz / guest SSIDs show up
-        // in the cache check below.
-        `Device.WiFi.SSID.${i}.SSID`,
-        `Device.WiFi.SSID.${i}.Enable`,
-        `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
+      if (useZTE) {
         // ZTE (TR-098 variant) — uses InternetGatewayDevice.LANDevice.1.WIFI.*
-        // instead of WLANConfiguration. SSID/KeyPassphrase live under
-        // WIFI.SSID.{i} and WIFI.AccessPoint.{i}.
-        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`,
-        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Enable`,
-        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Status`,
-        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.X_ZTE-COM_OperatingFrequencyBand`,
-        `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Security.KeyPassphrase`,
-        `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`,
-        `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Enable`,
-      );
+        // SSID/KeyPassphrase live under WIFI.SSID.{i} and WIFI.AccessPoint.{i}.
+        wifiPaths.push(
+          `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`,
+          `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Enable`,
+          `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Status`,
+          `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.X_ZTE-COM_OperatingFrequencyBand`,
+          `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`,
+          `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Enable`,
+          `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Security.KeyPassphrase`,
+        );
+      }
+      if (useWLAN) {
+        wifiPaths.push(
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.KeyPassphrase`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Enable`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Channel`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Status`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Standard`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.BandWidth`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
+          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
+        );
+      }
+      if (useTR181) {
+        // TR-181 paths — iterate all instances so 5GHz / guest SSIDs show up.
+        wifiPaths.push(
+          `Device.WiFi.SSID.${i}.SSID`,
+          `Device.WiFi.SSID.${i}.Enable`,
+          `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
+        );
+      }
     }
 
     // We consider the cache "complete" only when we already have the most
@@ -801,7 +853,8 @@ export class CwmpService {
     for (let i = 1; i <= 8; i++) {
       const ssid = params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`]
         || params[`Device.WiFi.SSID.${i}.SSID`]
-        || params[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`];
+        || params[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`]
+        || params[`InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`];
       if (ssid !== undefined) knownInstances.add(i);
     }
 
