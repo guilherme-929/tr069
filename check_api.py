@@ -1,7 +1,7 @@
 """Check API data"""
 import urllib.request, json
 
-base = 'http://177.93.157.113/api'
+base = 'http://179.51.184.205/api'
 
 # Login
 data = json.dumps({'email': 'admin@acs.local', 'password': 'admin123'}).encode()
@@ -38,7 +38,7 @@ except urllib.error.HTTPError as e:
 # Try events endpoint path
 for path in ['/events', '/api/events']:
     try:
-        req5 = urllib.request.Request(f'http://177.93.157.113{path}', headers={'Authorization': f'Bearer {token}'})
+        req5 = urllib.request.Request(f'http://179.51.184.205{path}', headers={'Authorization': f'Bearer {token}'})
         r5 = urllib.request.urlopen(req5)
         print(f'\nEvents ({path}): {json.dumps(json.loads(r5.read()), indent=2)[:500]}')
     except urllib.error.HTTPError as e:

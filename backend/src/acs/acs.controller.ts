@@ -100,7 +100,7 @@ export class AcsController {
   @Post('api/devices/:id/wifi')
   setWiFi(
     @Param('id') id: string,
-    @Body() body: { ssid: string; password: string },
+    @Body() body: { ssid: string; password: string; instance?: number },
   ) {
     return this.cwmpService.handleSetWiFiConfig(id, body);
   }

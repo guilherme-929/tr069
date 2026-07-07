@@ -72,7 +72,7 @@ export class ConfigService {
       { key: 'cwmp.auth', value: 'AUTH("alemnet", "bf2fef2d-4c7d-45ab-be80-2699d5eada11")', category: 'cwmp', description: 'CWMP authentication expression' },
       { key: 'acs.default.username', value: 'alemnet', category: 'general', description: 'Default ACS username for CPE provisioning' },
       { key: 'acs.default.password', value: 'bf2fef2d-4c7d-45ab-be80-2699d5eada11', category: 'general', description: 'Default ACS password for CPE provisioning' },
-      { key: 'acs.public.url', value: process.env.ACS_PUBLIC_URL || 'http://177.93.157.113:7547', category: 'general', description: 'Public ACS URL for CPE to connect' },
+      { key: 'acs.public.url', value: process.env.ACS_PUBLIC_URL || 'http://179.51.184.205:7547', category: 'general', description: 'Public ACS URL for CPE to connect' },
       { key: 'cwmp.inform.interval', value: '300', category: 'cwmp', description: 'Default periodic inform interval in seconds' },
       { key: 'cwmp.connectionRequestTimeout', value: '2000', category: 'cwmp', description: 'Connection request timeout in ms' },
       { key: 'device.default.periodicInformEnable', value: 'true', category: 'device', description: 'Enable periodic inform by default' },

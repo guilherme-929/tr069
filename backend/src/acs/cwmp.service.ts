@@ -702,15 +702,20 @@ export class CwmpService {
     return this.handleDownload(deviceId, downloadUrl, '1 Firmware Upgrade Image');
   }
 
-  async handleSetWiFiConfig(deviceId: string, params: { ssid: string; password: string }): Promise<any> {
+  async handleSetWiFiConfig(
+    deviceId: string,
+    params: { ssid: string; password: string; instance?: number },
+  ): Promise<any> {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');
 
+    const instance = Math.min(Math.max(parseInt(String(params.instance ?? 1), 10) || 1, 1), 8);
+
     const wifiParams = [
-      { name: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID', value: params.ssid },
-      { name: 'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase', value: params.password },
-      { name: 'Device.WiFi.SSID.1.SSID', value: params.ssid },
-      { name: 'Device.WiFi.AccessPoint.1.Security.KeyPassphrase', value: params.password },
+      { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.SSID`, value: params.ssid },
+      { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.KeyPassphrase`, value: params.password },
+      { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
+      { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
     ];
 
     const task = await this.prisma.task.create({
@@ -766,19 +771,48 @@ export class CwmpService {
         `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`,
         `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
         `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
+        // TR-181 paths — iterate all instances so 5GHz / guest SSIDs show up
+        // in the cache check below.
+        `Device.WiFi.SSID.${i}.SSID`,
+        `Device.WiFi.SSID.${i}.Enable`,
+        `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
       );
     }
-    wifiPaths.push(
-      'Device.WiFi.SSID.1.SSID',
-      'Device.WiFi.AccessPoint.1.Security.KeyPassphrase',
-    );
 
-    const existingParams = wifiPaths.reduce((acc, path) => {
-      if (params[path] !== undefined && params[path] !== '') acc[path] = params[path];
-      return acc;
-    }, {} as Record<string, string>);
+    // We consider the cache "complete" only when we already have the most
+    // important fields for every instance we know about. If any instance is
+    // missing its SSID/KeyPassphrase we must go back to the CPE — returning a
+    // partial cache (e.g. only `Enable` or `Channel` populated) used to make
+    // the UI render blank WLAN cards.
+    const knownInstances = new Set<number>();
+    for (let i = 1; i <= 8; i++) {
+      const ssid = params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`];
+      const ssid181 = params[`Device.WiFi.SSID.${i}.SSID`];
+      if (ssid !== undefined || ssid181 !== undefined) knownInstances.add(i);
+    }
 
-    if (Object.keys(existingParams).length > 0) {
+    let cacheComplete = knownInstances.size > 0;
+    const existingParams: Record<string, string> = {};
+    for (const path of wifiPaths) {
+      const v = params[path];
+      if (v === undefined || v === '') continue;
+      existingParams[path] = v;
+    }
+
+    if (cacheComplete) {
+      for (const idx of knownInstances) {
+        const ssid = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.SSID`]
+          || existingParams[`Device.WiFi.SSID.${idx}.SSID`];
+        const pwd = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.KeyPassphrase`]
+          || existingParams[`Device.WiFi.AccessPoint.${idx}.Security.KeyPassphrase`];
+        if (!ssid || !pwd) {
+          cacheComplete = false;
+          break;
+        }
+      }
+    }
+
+    if (cacheComplete) {
       return { params: existingParams, source: 'cache' };
     }
 
@@ -930,18 +964,18 @@ export class CwmpService {
       where: { deviceId, type: { in: ['GetParameterNames', 'GetParameterValues'] }, status: { in: ['PENDING', 'IN_PROGRESS'] } },
     });
 
-    // Extract WiFi-related parameters from discovered values
+    // Extract WiFi-related parameters from discovered values. Match the
+    // exact TR-098/TR-181 paths instead of a substring search — the old
+    // "includes('radi')" filter used to pull in RADIUS keys and other
+    // unrelated params, polluting the WiFi tab in the UI.
+    const IGD_WLAN_PREFIX = 'InternetGatewayDevice.LANDevice.';
+    const TR181_WIFI_PREFIX = 'Device.WiFi.';
     const wifiParams = Object.fromEntries(
-      Object.entries(values).filter(([key]) =>
-        key.toLowerCase().includes('wifi') ||
-        key.toLowerCase().includes('wlan') ||
-        key.toLowerCase().includes('ssid') ||
-        key.toLowerCase().includes('presharedkey') ||
-        key.toLowerCase().includes('keypassphrase') ||
-        key.toLowerCase().includes('beacon') ||
-        key.toLowerCase().includes('channel') ||
-        key.toLowerCase().includes('radi'),
-      ),
+      Object.entries(values).filter(([key]) => {
+        if (key.startsWith(IGD_WLAN_PREFIX) && key.includes('.WLANConfiguration.')) return true;
+        if (key.startsWith(TR181_WIFI_PREFIX)) return true;
+        return false;
+      }),
     );
 
     return {

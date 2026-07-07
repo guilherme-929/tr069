@@ -9,11 +9,11 @@ if [ -n "$TOKEN" ]; then
   RESULT=$(curl -s -X PATCH http://localhost:3000/api/tenant/acs-settings \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"acsPublicUrl":"http://177.93.157.113:7547","connectionRequestEnabled":true}')
+    -d '{"acsPublicUrl":"http://179.51.184.205:7547","connectionRequestEnabled":true}')
   echo "PATCH RESULT: $RESULT"
   CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH http://localhost:3000/api/tenant/acs-settings \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"acsPublicUrl":"http://177.93.157.113:7547","connectionRequestEnabled":true}')
+    -d '{"acsPublicUrl":"http://179.51.184.205:7547","connectionRequestEnabled":true}')
   echo "PATCH HTTP CODE: $CODE"
 fi

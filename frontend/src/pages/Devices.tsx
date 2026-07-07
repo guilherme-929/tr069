@@ -44,24 +44,29 @@ export default function Devices() {
   }, [page, search, statusFilter]);
 
   useEffect(() => {
-    if (activeTab === 'WiFi' && selected) {
-      const hasWifiParams = selected.parameters?.['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
-        || selected.parameters?.['Device.WiFi.SSID.1.SSID'];
-      if (!hasWifiParams) {
-        (async () => {
-          try {
-            const { data } = await api.post(`/devices/${selected.id}/wifi/read`);
-            if (data.source === 'cache' && data.params) {
-              setSelected((prev: any) => ({
-                ...prev,
-                parameters: { ...prev.parameters, ...data.params },
-              }));
-            }
-          } catch {}
-        })();
-      }
-    }
-  }, [activeTab, selected?.id]);
+    if (activeTab !== 'WiFi' || !selected) return;
+    const params = (selected.parameters as Record<string, string>) || {};
+    const hasAnyWifiSsid = Object.keys(params).some(k =>
+      (k.startsWith('InternetGatewayDevice.LANDevice.') && k.includes('.WLANConfiguration.') && k.endsWith('.SSID')) ||
+      (k.startsWith('Device.WiFi.SSID.') && k.endsWith('.SSID'))
+    );
+    if (hasAnyWifiSsid) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.post(`/devices/${selected.id}/wifi/read`);
+        if (cancelled) return;
+        if (data.source === 'cache' && data.params) {
+          setSelected((prev: any) => ({
+            ...prev,
+            parameters: { ...prev?.parameters, ...data.params },
+          }));
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, selected?.id, selected?.parameters]);
 
   useEffect(() => {
     if (activeTab === 'Overview' && selected) {
@@ -845,9 +850,10 @@ export default function Devices() {
                   const wlanInstances: Record<string, Record<string, string>> = {};
                   Object.entries(allParams).forEach(([key, val]) => {
                     const igdMatch = key.match(/InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.(\d+)\.(.+)/);
-                    const devMatch = key.match(/Device\.WiFi\.(?:SSID|AccessPoint|Radio)\.(\d+)\.(.+)/);
-                    const idx = igdMatch?.[1] || devMatch?.[1];
-                    const subKey = igdMatch?.[2] || devMatch?.[2] || key;
+                    // Device.WiFi can expose SSID.{i}, AccessPoint.{i}, Radio.{i}, EndPoint.{i}
+                    const devMatch = key.match(/^Device\.WiFi\.(SSID|AccessPoint|Radio|EndPoint)\.(\d+)\.(.+)/);
+                    const idx = igdMatch?.[1] || devMatch?.[2];
+                    const subKey = igdMatch?.[2] || devMatch?.[3] || key;
                     if (idx) {
                       if (!wlanInstances[idx]) wlanInstances[idx] = {};
                       wlanInstances[idx][subKey] = String(val);
