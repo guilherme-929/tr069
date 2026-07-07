@@ -400,6 +400,8 @@ export class CwmpService {
       }
     }
 
+    this.logger.log(`[GPV-RESP] lastSerial=${this.lastSerial} names=${Object.keys(paramMap).join('|') || '(empty/Fault)'} cmdKey=${response?.CommandKey || '-'} fault=${data?.['soap:Fault'] ? JSON.stringify(data['soap:Fault']).slice(0,200) : (data?.Fault ? JSON.stringify(data.Fault).slice(0,200) : 'none')}`);
+
     if (Object.keys(paramMap).length === 0 || !this.lastSerial) return this.buildEmptySoapEnvelope();
 
     const device = await this.prisma.device.findUnique({
@@ -498,6 +500,7 @@ export class CwmpService {
 
     const paramList = response?.ParameterList?.ParameterInfoStruct || [];
     const params = Array.isArray(paramList) ? paramList : [paramList];
+    this.logger.log(`[GPN-RESP] lastSerial=${this.lastSerial} names=${params.map((p:any)=>p.Name).join('|').slice(0,400)}`);
 
     const device = await this.prisma.device.findUnique({
       where: { serial: this.lastSerial },
@@ -776,6 +779,16 @@ export class CwmpService {
         `Device.WiFi.SSID.${i}.SSID`,
         `Device.WiFi.SSID.${i}.Enable`,
         `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
+        // ZTE (TR-098 variant) — uses InternetGatewayDevice.LANDevice.1.WIFI.*
+        // instead of WLANConfiguration. SSID/KeyPassphrase live under
+        // WIFI.SSID.{i} and WIFI.AccessPoint.{i}.
+        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`,
+        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Enable`,
+        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Status`,
+        `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.X_ZTE-COM_OperatingFrequencyBand`,
+        `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Security.KeyPassphrase`,
+        `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`,
+        `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Enable`,
       );
     }
 
@@ -786,9 +799,10 @@ export class CwmpService {
     // the UI render blank WLAN cards.
     const knownInstances = new Set<number>();
     for (let i = 1; i <= 8; i++) {
-      const ssid = params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`];
-      const ssid181 = params[`Device.WiFi.SSID.${i}.SSID`];
-      if (ssid !== undefined || ssid181 !== undefined) knownInstances.add(i);
+      const ssid = params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`]
+        || params[`Device.WiFi.SSID.${i}.SSID`]
+        || params[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`];
+      if (ssid !== undefined) knownInstances.add(i);
     }
 
     let cacheComplete = knownInstances.size > 0;
@@ -802,9 +816,12 @@ export class CwmpService {
     if (cacheComplete) {
       for (const idx of knownInstances) {
         const ssid = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.SSID`]
-          || existingParams[`Device.WiFi.SSID.${idx}.SSID`];
+          || existingParams[`Device.WiFi.SSID.${idx}.SSID`]
+          || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${idx}.SSID`]
+          || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${idx}.SSID`];
         const pwd = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.KeyPassphrase`]
-          || existingParams[`Device.WiFi.AccessPoint.${idx}.Security.KeyPassphrase`];
+          || existingParams[`Device.WiFi.AccessPoint.${idx}.Security.KeyPassphrase`]
+          || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${idx}.Security.KeyPassphrase`];
         if (!ssid || !pwd) {
           cacheComplete = false;
           break;
@@ -846,33 +863,61 @@ export class CwmpService {
     const params = (device.parameters as Record<string, string>) || {};
     const connectedDevices: any[] = [];
 
+    // TR-098 (WLANConfiguration) + ZTE WIFI.AssociatedDevice variants
+    const readAssociated = (wlan: number, devIndex: number) => {
+      const igd = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${wlan}.AssociatedDevice.${devIndex}`;
+      const zte = `InternetGatewayDevice.LANDevice.1.WIFI.AssociatedDevice.${devIndex}`;
+      const mac = params[`${zte}.AssociatedDeviceMACAddress`]
+        || params[`${zte}.MACAddress`]
+        || params[`${igd}.AssociatedDeviceMACAddress`]
+        || params[`${igd}.X_ZTE-COM_MACAddress`];
+      if (!mac) return null;
+      return {
+        wlan,
+        mac,
+        name: params[`${zte}.X_ZTE-COM_AssociatedDeviceName`]
+          || params[`${igd}.X_ZTE-COM_AssociatedDeviceName`] || '',
+        ip: params[`${zte}.AssociatedDeviceIPAddress`]
+          || params[`${igd}.AssociatedDeviceIPAddress`] || '',
+        rssi: parseInt(params[`${zte}.AssociatedDeviceRssi`]
+          || params[`${igd}.AssociatedDeviceRssi`] || '0'),
+        snr: parseInt(params[`${zte}.X_ZTE-COM_WLAN_SNR`]
+          || params[`${igd}.X_ZTE-COM_WLAN_SNR`] || '0'),
+        noise: parseInt(params[`${zte}.X_ZTE-COM_WLAN_Noise`]
+          || params[`${igd}.X_ZTE-COM_WLAN_Noise`] || '0'),
+        bandwidth: params[`${zte}.AssociatedDeviceBandWidth`]
+          || params[`${igd}.AssociatedDeviceBandWidth`] || '',
+        txRate: parseInt(params[`${zte}.X_ZTE-COM_TXRate`]
+          || params[`${zte}.AssociatedDeviceRate`]
+          || params[`${igd}.X_ZTE-COM_TXRate`]
+          || params[`${igd}.AssociatedDeviceRate`] || '0'),
+        rxRate: parseInt(params[`${zte}.X_ZTE-COM_RXRate`]
+          || params[`${igd}.X_ZTE-COM_RXRate`] || '0'),
+        bytesReceived: parseInt(params[`${zte}.X_ZTE-COM_WLAN_BytesReceived`]
+          || params[`${igd}.X_ZTE-COM_WLAN_BytesReceived`] || '0'),
+        bytesSent: parseInt(params[`${zte}.X_ZTE-COM_WLAN_BytesSend`]
+          || params[`${igd}.X_ZTE-COM_WLAN_BytesSend`] || '0'),
+        stayTime: params[`${zte}.X_ZTE-COM_StayTime`]
+          || params[`${igd}.X_ZTE-COM_StayTime`] || '0',
+        radio: params[`${zte}.X_ZTE-COM_WLAN_Radio`]
+          || params[`${igd}.X_ZTE-COM_WLAN_Radio`] || '',
+        clientMode: params[`${zte}.X_ZTE-COM_WLAN_ClientMode`]
+          || params[`${igd}.X_ZTE-COM_WLAN_ClientMode`] || '',
+        clientChannelWidth: params[`${zte}.X_ZTE-COM_WLAN_ClientChannelWidth`]
+          || params[`${igd}.X_ZTE-COM_WLAN_ClientChannelWidth`] || '',
+        signalStrength: parseInt(params[`${zte}.X_ZTE-COM_SignalStrength`]
+          || params[`${zte}.X_ZTE-COM_WLAN_RSSI`]
+          || params[`${igd}.X_ZTE-COM_SignalStrength`]
+          || params[`${igd}.X_ZTE-COM_WLAN_RSSI`] || '0'),
+      };
+    };
+
     for (let wlan = 1; wlan <= 8; wlan++) {
       let devIndex = 1;
       while (true) {
-        const base = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${wlan}.AssociatedDevice.${devIndex}`;
-        const mac = params[`${base}.AssociatedDeviceMACAddress`]
-          || params[`${base}.X_ZTE-COM_MACAddress`];
-        if (!mac) break;
-
-        connectedDevices.push({
-          wlan,
-          mac,
-          name: params[`${base}.X_ZTE-COM_AssociatedDeviceName`] || '',
-          ip: params[`${base}.AssociatedDeviceIPAddress`] || '',
-          rssi: parseInt(params[`${base}.AssociatedDeviceRssi`] || '0'),
-          snr: parseInt(params[`${base}.X_ZTE-COM_WLAN_SNR`] || '0'),
-          noise: parseInt(params[`${base}.X_ZTE-COM_WLAN_Noise`] || '0'),
-          bandwidth: params[`${base}.AssociatedDeviceBandWidth`] || '',
-          txRate: parseInt(params[`${base}.X_ZTE-COM_TXRate`] || params[`${base}.AssociatedDeviceRate`] || '0'),
-          rxRate: parseInt(params[`${base}.X_ZTE-COM_RXRate`] || '0'),
-          bytesReceived: parseInt(params[`${base}.X_ZTE-COM_WLAN_BytesReceived`] || '0'),
-          bytesSent: parseInt(params[`${base}.X_ZTE-COM_WLAN_BytesSend`] || '0'),
-          stayTime: params[`${base}.X_ZTE-COM_StayTime`] || '0',
-          radio: params[`${base}.X_ZTE-COM_WLAN_Radio`] || '',
-          clientMode: params[`${base}.X_ZTE-COM_WLAN_ClientMode`] || '',
-          clientChannelWidth: params[`${base}.X_ZTE-COM_WLAN_ClientChannelWidth`] || '',
-          signalStrength: parseInt(params[`${base}.X_ZTE-COM_SignalStrength`] || params[`${base}.X_ZTE-COM_WLAN_RSSI`] || '0'),
-        });
+        const cd = readAssociated(wlan, devIndex);
+        if (!cd) break;
+        connectedDevices.push(cd);
         devIndex++;
       }
     }
@@ -1037,6 +1082,7 @@ export class CwmpService {
       case 'GetParameterValues': {
         const payload = task.payload as any;
         const names = payload?.names || ['Device.DeviceInfo.*'];
+        this.logger.log(`[GPV-SEND] task=${task.id} names=${JSON.stringify(names).slice(0,300)}`);
         return wrap(this.builder.build(
           this.buildSoapResponse('GetParameterValues', {
             ParameterNames: { string: names },

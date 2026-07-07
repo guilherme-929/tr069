@@ -852,8 +852,13 @@ export default function Devices() {
                     const igdMatch = key.match(/InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.(\d+)\.(.+)/);
                     // Device.WiFi can expose SSID.{i}, AccessPoint.{i}, Radio.{i}, EndPoint.{i}
                     const devMatch = key.match(/^Device\.WiFi\.(SSID|AccessPoint|Radio|EndPoint)\.(\d+)\.(.+)/);
-                    const idx = igdMatch?.[1] || devMatch?.[2];
-                    const subKey = igdMatch?.[2] || devMatch?.[3] || key;
+                    // ZTE (TR-098 variant) exposes WIFI.SSID.{i}, WIFI.AccessPoint.{i}, WIFI.Radio.{i}
+                    const zteMatch = key.match(/^InternetGatewayDevice\.LANDevice\.\d+\.WIFI\.(SSID|AccessPoint|Radio)\.(\d+)\.(.+)/);
+                    const idx = igdMatch?.[1] || devMatch?.[2] || zteMatch?.[2];
+                    let subKey: string = key;
+                    if (igdMatch?.[2]) subKey = igdMatch[2];
+                    else if (devMatch?.[3]) subKey = devMatch[3];
+                    else if (zteMatch) subKey = `${zteMatch[1]}.${zteMatch[3]}`;
                     if (idx) {
                       if (!wlanInstances[idx]) wlanInstances[idx] = {};
                       wlanInstances[idx][subKey] = String(val);
@@ -876,16 +881,16 @@ export default function Devices() {
                         </div>
                       )}
 
-                      {instances.map(([idx, params]) => {
-                        const ssid = params['SSID'] || '';
-                        const pwdKey = Object.keys(params).find(k => k.toLowerCase().includes('keypassphrase') || k.toLowerCase().includes('presharedkey'));
-                        const password = pwdKey ? params[pwdKey] : '';
-                        const enabled = params['Enable'] === '1' || params['Enable'] === 'true';
-                        const channel = params['Channel'] || '-';
-                        const standard = params['Standard'] || params['X_ZTE-COM_Standard'] || '-';
-                        const bandwidth = params['X_ZTE-COM_BandWidth'] || params['OperatingStandards'] || '-';
-                        const associations = params['TotalAssociations'] || params['X_ZTE-COM_TotalAssociations'] || '-';
-                        const freqBand = params['OperatingFrequencyBand'] || params['X_ZTE-COM_OperatingFrequencyBand'] || bandLabels[idx] || `Band ${idx}`;
+                       {instances.map(([idx, params]) => {
+                         const ssid = params['SSID'] || params['SSID.SSID'] || '';
+                         const pwdKey = Object.keys(params).find(k => k.toLowerCase().includes('keypassphrase') || k.toLowerCase().includes('presharedkey'));
+                         const password = pwdKey ? params[pwdKey] : '';
+                         const enabled = params['Enable'] === '1' || params['Enable'] === 'true' || params['SSID.Enable'] === '1' || params['AccessPoint.Enable'] === '1';
+                         const channel = params['Channel'] || '-';
+                         const standard = params['Standard'] || params['X_ZTE-COM_Standard'] || '-';
+                         const bandwidth = params['X_ZTE-COM_BandWidth'] || params['OperatingStandards'] || '-';
+                         const associations = params['TotalAssociations'] || params['X_ZTE-COM_TotalAssociations'] || '-';
+                         const freqBand = params['OperatingFrequencyBand'] || params['X_ZTE-COM_OperatingFrequencyBand'] || params['SSID.X_ZTE-COM_OperatingFrequencyBand'] || bandLabels[idx] || `Band ${idx}`;
                         return (
                           <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700/50">
                             <div className="flex items-center justify-between mb-2">

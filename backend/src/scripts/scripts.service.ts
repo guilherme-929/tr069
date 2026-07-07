@@ -172,6 +172,10 @@ export class ScriptsService {
         await this.createSetParamTask(deviceId, action.path!, action.value, tenantId);
         break;
 
+      case 'getParameter':
+        await this.createGetParamTask(deviceId, action.path!, tenantId);
+        break;
+
       case 'setTag':
         await this.setDeviceTag(deviceId, action.tag!, true);
         break;
@@ -182,6 +186,43 @@ export class ScriptsService {
 
       default:
         this.logger.warn(`Unknown script action type: ${action.type}`);
+    }
+  }
+
+  private async createGetParamTask(deviceId: string, path: string, tenantId: string) {
+    if (!path) return;
+    // Expand TR-069 wildcards (e.g. WLANConfiguration.*.SSID) into explicit
+    // instances 1..8. Many CPEs (e.g. ZTE) reject GetParameterValues with a
+    // '*' segment and return Fault 9005, so we send concrete instance paths.
+    const names: string[] = [];
+    if (path.includes('*')) {
+      for (let i = 1; i <= 8; i++) {
+        names.push(path.replace(/\*/g, String(i)));
+      }
+    } else {
+      names.push(path);
+    }
+
+    const existingPending = await this.prisma.task.count({
+      where: { deviceId, status: 'PENDING', type: 'GetParameterValues' },
+    });
+
+    if (existingPending < 50) {
+      for (const name of names) {
+        const dup = await this.prisma.task.count({
+          where: { deviceId, status: 'PENDING', type: 'GetParameterValues', payload: { path: ['names'], equals: [name] } as any },
+        });
+        if (dup > 0) continue;
+        await this.prisma.task.create({
+          data: {
+            deviceId,
+            type: 'GetParameterValues',
+            status: 'PENDING',
+            payload: { names: [name] },
+            tenantId,
+          },
+        });
+      }
     }
   }
 

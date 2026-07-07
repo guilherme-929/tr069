@@ -149,14 +149,16 @@ export class DevicesService {
     const wifiBands: { band: string; ssid: string; channel: string; status: string; standard: string; associations: string }[] = [];
     for (let i = 1; i <= 8; i++) {
       const prefix = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}`;
-      const ssid = params[`${prefix}.SSID`];
+      const ztePrefix = `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}`;
+      const ssid = params[`${prefix}.SSID`] || params[`${ztePrefix}.SSID`];
       if (ssid) {
         wifiBands.push({
           band: params[`${prefix}.X_ZTE-COM_OperatingFrequencyBand`]
-            || params[`${prefix}.X_ZTE-COM_WLAN_SupportedFrequencyBands`] || `WLAN${i}`,
+            || params[`${prefix}.X_ZTE-COM_WLAN_SupportedFrequencyBands`]
+            || params[`${ztePrefix}.X_ZTE-COM_OperatingFrequencyBand`] || `WLAN${i}`,
           ssid,
           channel: params[`${prefix}.Channel`] || '',
-          status: params[`${prefix}.Status`] || '',
+          status: params[`${prefix}.Status`] || params[`${ztePrefix}.Status`] || '',
           standard: params[`${prefix}.Standard`] || '',
           associations: params[`${prefix}.TotalAssociations`] || '0',
         });
