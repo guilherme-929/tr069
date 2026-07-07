@@ -52,7 +52,8 @@ export class AcsService implements OnModuleInit {
     if (!await this.validateAuth(req, res)) return;
 
     let body = '';
-    const clientIp = req.socket?.remoteAddress || req.headers['x-forwarded-for'] as string || '';
+    const rawClientIp = req.socket?.remoteAddress || req.headers['x-forwarded-for'] as string || '';
+    const clientIp = rawClientIp.replace(/^::ffff:/, '');
     req.on('data', (chunk) => (body += chunk));
     req.on('end', async () => {
       try {
@@ -79,24 +80,7 @@ export class AcsService implements OnModuleInit {
           return;
         }
 
-        const existingSession = serial ? this.sessions.get(serial) : undefined;
-        const hasReadyTasks = existingSession && existingSession.state === 'READY' && existingSession.currentTaskIndex < existingSession.pendingTasks.length;
-
-        if (hasReadyTasks) {
-          this.logger.log(`Device ${serial} has ready tasks, sending command instead of processing new request`);
-          const task = existingSession!.pendingTasks[existingSession!.currentTaskIndex];
-          const commandXml = await this.cwmp.buildCwmpCommand(task, existingSession!.deviceId);
-          existingSession!.state = 'SENDING';
-          await this.prisma.task.update({
-            where: { id: task.id },
-            data: { status: 'IN_PROGRESS' },
-          });
-          res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
-          res.end(commandXml);
-          return;
-        }
-
-        const xmlResponse = await this.cwmp.handleCwmp(body, serial || undefined);
+        const xmlResponse = await this.cwmp.handleCwmp(body, serial || undefined, undefined, clientIp);
         this.updateSessionAfterResponse(serial, xmlResponse);
 
         if (xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse')) {
