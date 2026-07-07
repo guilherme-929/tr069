@@ -80,6 +80,9 @@ export class AcsService implements OnModuleInit {
           return;
         }
 
+        // ZTE CPE workaround: some CPEs never send empty POST after InformResponse,
+        // they reconnect with a new Inform instead. If session is READY with pending
+        // tasks, respond with the first pending command directly.
         const xmlResponse = await this.cwmp.handleCwmp(body, serial || undefined, undefined, clientIp);
         this.updateSessionAfterResponse(serial, xmlResponse);
 
@@ -94,11 +97,10 @@ export class AcsService implements OnModuleInit {
                 where: { deviceId: dev.id, status: 'PENDING' },
                 orderBy: { createdAt: 'asc' },
               });
-              const existingSession = serial ? this.sessions.get(serial) : undefined;
-              const wasAlreadyReady = existingSession && existingSession.pendingTasks.length > 0;
-
               if (pendingTasks.length > 0) {
                 let session = this.sessions.get(infoSerial);
+                const wasReady = session && session.state === 'READY' && session.pendingTasks.length > 0;
+
                 if (!session) {
                   session = { serial: infoSerial, deviceId: dev.id, state: 'READY', pendingTasks: [], currentTaskIndex: 0, tenantId: dev.tenantId || '' };
                   this.sessions.set(infoSerial, session);
@@ -110,21 +112,40 @@ export class AcsService implements OnModuleInit {
                 session.tenantId = dev.tenantId || session.tenantId;
                 this.logger.log(`Device ${infoSerial} has ${pendingTasks.length} pending tasks — session set to READY`);
 
-                // If CPE was already in a READY session (previous InformResponse sent),
-                // respond with the pending command instead of another InformResponse.
-                // Some CPEs (ZTE) never send empty POST and expect commands in Inform responses.
-                if (wasAlreadyReady) {
-                  const task = pendingTasks[0];
-                  const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
+                // ZTE CPE workaround: some CPEs (e.g. ZTE F670L) never send the empty HTTP POST
+                // after InformResponse. Instead, they reconnect with a new Inform to poll for commands.
+                // If the session was already READY (from previous Inform), respond with the first
+                // pending command directly instead of another InformResponse.
+                if (wasReady && session.currentTaskIndex < session.pendingTasks.length) {
+                  const task = session.pendingTasks[session.currentTaskIndex];
                   session.state = 'SENDING';
-                  await this.prisma.task.update({
-                    where: { id: task.id },
-                    data: { status: 'IN_PROGRESS' },
-                  });
-                  this.logger.log(`Device ${infoSerial} already READY — sending command "${task.type}" instead of InformResponse`);
-                  res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
-                  res.end(commandXml);
-                  return;
+                  session.currentTaskIndex++;
+                  const newAttempts = (task.attempts || 0) + 1;
+                  if (newAttempts >= (task.maxAttempts || 3)) {
+                    await this.prisma.task.update({
+                      where: { id: task.id },
+                      data: { status: 'FAILED', attempts: newAttempts },
+                    });
+                    this.logger.warn(`Device ${infoSerial} — task "${task.type}" failed after ${newAttempts} attempts`);
+                    // Remove failed task and rebuild remaining list
+                    const remaining = await this.prisma.task.findMany({
+                      where: { deviceId: dev.id, status: 'PENDING' },
+                      orderBy: { createdAt: 'asc' },
+                    });
+                    session.pendingTasks = remaining;
+                    session.currentTaskIndex = 0;
+                    session.state = remaining.length > 0 ? 'READY' : 'INFORMED';
+                  } else {
+                    await this.prisma.task.update({
+                      where: { id: task.id },
+                      data: { status: 'IN_PROGRESS', attempts: newAttempts },
+                    });
+                    const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
+                    this.logger.log(`Device ${infoSerial} reconnected (no empty POST) — sending command "${task.type}" (attempt ${newAttempts}/${task.maxAttempts || 3})`);
+                    res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
+                    res.end(commandXml);
+                    return;
+                  }
                 }
               } else {
                 const session = this.sessions.get(infoSerial);
