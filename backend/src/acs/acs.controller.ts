@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards, Res } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, UseGuards, Res, Req } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AcsService } from './acs.service';
 import { CwmpService } from './cwmp.service';
@@ -19,8 +19,14 @@ export class AcsController {
 
   @Public()
   @Post('cwmp')
-  async handleCwmp(@Body() body: string, @Res() res: any) {
-    const xmlResponse = await this.cwmpService.handleCwmp(body || '');
+  async handleCwmp(@Body() body: string, @Req() req: any, @Res() res: any) {
+    // Get real client IP considering nginx proxy (X-Forwarded-For, X-Real-IP)
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+      || req.headers['x-real-ip']
+      || req.ip
+      || req.connection?.remoteAddress
+      || '';
+    const xmlResponse = await this.cwmpService.handleCwmp(body || '', undefined, undefined, clientIp);
     res.type('text/xml').send(xmlResponse);
   }
 
