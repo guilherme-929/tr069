@@ -428,57 +428,86 @@ export default function Devices() {
                   ))}
                 </div>
 
-                {/* WiFi Section */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                      <Wifi size={13} className="inline mr-1.5 -mt-0.5" />
-                      Interface WiFi 2.4GHz
-                    </h4>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
-                      {(() => {
-                        const p = selected.parameters as Record<string, string> || {};
-                        const wb = virtualParams?.wifiBands?.find((b: any) => b.band.includes('2.4') || b.band === 'WLAN1');
-                        const ssid = wb?.ssid || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] || '-';
-                        const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] || p['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] || '-';
-                        const ch = wb?.channel || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel'] || '-';
-                        const sta = wb?.status || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status'] || '-';
-                        const assoc = wb?.associations || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations'] || '0';
-                        return (<>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Canal</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ch}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Status</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{sta}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Clientes Conectados</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{assoc}</span></div>
-                        </>);
-                      })()}
+                {/* WiFi Section — only shown when data available */}
+                {(() => {
+                  const p = selected.parameters as Record<string, string> || {};
+                  const hasWifi = virtualParams?.wifiBands?.length > 0
+                    || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
+                    || p['Device.WiFi.SSID.1.SSID'];
+                  if (!hasWifi) return null;
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      <section>
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                          <Wifi size={13} className="inline mr-1.5 -mt-0.5" />
+                          Interface WiFi 2.4GHz
+                        </h4>
+                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
+                          {(() => {
+                            const wb = virtualParams?.wifiBands?.find((b: any) => b.band.includes('2.4') || b.band === 'WLAN1');
+                            const ssid = wb?.ssid || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] || '-';
+                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] || p['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] || '-';
+                            const ch = wb?.channel || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel'] || '-';
+                            const sta = wb?.status || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status'] || '-';
+                            const assoc = wb?.associations || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations'] || '0';
+                            return (<>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Canal</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ch}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Status</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{sta}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Clientes Conectados</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{assoc}</span></div>
+                            </>);
+                          })()}
+                        </div>
+                      </section>
+                      <section>
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                          <Wifi size={13} className="inline mr-1.5 -mt-0.5" />
+                          Interface WiFi 5GHz
+                        </h4>
+                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
+                          {(() => {
+                            const wb = virtualParams?.wifiBands?.find((b: any) => b.band.includes('5') || b.band === 'WLAN5');
+                            const ssid = wb?.ssid || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID'] || '-';
+                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase'] || '-';
+                            const ch = wb?.channel || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel'] || '-';
+                            const sta = wb?.status || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status'] || '-';
+                            const assoc = wb?.associations || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations'] || '0';
+                            return (<>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Canal</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ch}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Status</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{sta}</span></div>
+                              <div className="flex justify-between text-xs"><span className="text-slate-500">Clientes Conectados</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{assoc}</span></div>
+                            </>);
+                          })()}
+                        </div>
+                      </section>
                     </div>
-                  </section>
-                  <section>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                      <Wifi size={13} className="inline mr-1.5 -mt-0.5" />
-                      Interface WiFi 5GHz
-                    </h4>
-                    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
-                      {(() => {
-                        const p = selected.parameters as Record<string, string> || {};
-                        const wb = virtualParams?.wifiBands?.find((b: any) => b.band.includes('5') || b.band === 'WLAN5');
-                        const ssid = wb?.ssid || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID'] || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID'] || '-';
-                        const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase'] || '-';
-                        const ch = wb?.channel || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel'] || '-';
-                        const sta = wb?.status || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status'] || '-';
-                        const assoc = wb?.associations || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations'] || '0';
-                        return (<>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Canal</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ch}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Status</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{sta}</span></div>
-                          <div className="flex justify-between text-xs"><span className="text-slate-500">Clientes Conectados</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{assoc}</span></div>
-                        </>);
-                      })()}
-                    </div>
-                  </section>
-                </div>
+                  );
+                })()}
+
+                {/* Reported Parameters from Inform */}
+                <section>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                    <Database size={13} className="inline mr-1.5 -mt-0.5" />
+                    Parameters Reportados pelo CPE
+                  </h4>
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 font-mono text-xs max-h-64 overflow-y-auto space-y-0.5">
+                    {(() => {
+                      const p = selected.parameters as Record<string, string> || {};
+                      const entries = Object.entries(p).filter(([k]) => !k.startsWith('__'));
+                      if (entries.length === 0) return <p className="text-slate-400 italic">Nenhum parameter reportado.</p>;
+                      return entries.sort(([a], [b]) => a.localeCompare(b)).map(([key, val]) => (
+                        <p key={key} className="break-all">
+                          <span className="text-primary">{key}</span>
+                          <span className="text-slate-300"> = </span>
+                          <span className="text-slate-900 dark:text-white">{String(val)}</span>
+                        </p>
+                      ));
+                    })()}
+                  </div>
+                </section>
 
                 {/* LAN Hosts */}
                 <section>
@@ -1052,6 +1081,7 @@ export default function Devices() {
                     <RadioTower size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-sm text-slate-400">Click "Scan All Parameters" to discover all TR-069 parameters available on this device.</p>
                     <p className="text-xs text-slate-400 mt-1">The scan runs recursively and fetches values for each parameter.</p>
+                    <p className="text-xs text-warning mt-2 font-semibold">Nota: Alguns modelos de CPE (ex: ZTE) podem rejeitar GetParameterNames/GetParameterValues com Fault 9005. Os parameters do Inform jah estao disponiveis na aba Overview.</p>
                   </div>
                 )}
               </section>
