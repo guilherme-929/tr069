@@ -42,6 +42,19 @@ export class CwmpService {
 
   async handleCwmp(xmlString: string, serial?: string, getSession?: () => any, clientIp?: string): Promise<string> {
     if (!xmlString || !xmlString.trim()) {
+      // Empty POST from the CPE — it's asking the ACS for the next command.
+      // Deliver a pending task if there is one (covers CPEs that don't accept
+      // multiple envelopes in the Inform response, and CGNAT scenarios where
+      // Connection Requests can't reach the device).
+      if (this.lastSerial) {
+        const device = await this.prisma.device.findUnique({ where: { serial: this.lastSerial } });
+        if (device) {
+          const pending = await this.prisma.task.count({ where: { deviceId: device.id, status: 'PENDING' } });
+          if (pending > 0) {
+            return this.buildInformResponseWithTasks(device);
+          }
+        }
+      }
       return this.buildEmptySoapEnvelope();
     }
 
@@ -358,7 +371,7 @@ export class CwmpService {
       this.logger.log(`Device ${serial} has ${pendingCount} pending tasks after Inform`);
     }
 
-    return this.buildInformResponse(device, pendingCount > 0);
+    return this.buildInformResponseWithTasks(device);
   }
 
   private async handleTransferComplete(data: any): Promise<string> {
@@ -1176,11 +1189,59 @@ export class CwmpService {
 </soap:Envelope>`;
   }
 
+  private async getNextPendingTask(deviceId: string): Promise<any | null> {
+    // A new Inform means a fresh CWMP session. Any task left IN_PROGRESS from a
+    // previous session was never answered (e.g. CPE ignored the command or the
+    // session dropped). Reset it to PENDING so it can be retried now.
+    await this.prisma.task.updateMany({
+      where: { deviceId, status: 'IN_PROGRESS' },
+      data: { status: 'PENDING' },
+    });
+
+    const task = await this.prisma.task.findFirst({
+      where: { deviceId, status: 'PENDING' },
+      orderBy: [{ createdAt: 'asc' }],
+    });
+    if (!task) return null;
+    // Mark as IN_PROGRESS so we don't re-send it on the next Inform before the
+    // CPE has a chance to reply.
+    await this.prisma.task.update({
+      where: { id: task.id },
+      data: { status: 'IN_PROGRESS' },
+    });
+    return task;
+  }
+
   private buildInformResponse(device: any, hasPendingTasks: boolean): string {
     const responseObj = this.buildSoapResponse('InformResponse', {
       MaxEnvelopes: hasPendingTasks ? 2 : 1,
     });
     return `<?xml version="1.0" encoding="UTF-8"?>\n${this.builder.build(responseObj)}`;
+  }
+
+  /**
+   * Builds the InformResponse envelope followed by the next queued command
+   * (GetParameterValues / GetParameterNames / SetParameterValues / Reboot / ...)
+   * in the same HTTP body. TR-069 allows multiple SOAP Envelopes per HTTP
+   * message when MaxEnvelopes > 1. This is how the ACS delivers pending tasks
+   * to a CPE that only opens the session on its periodic Inform (e.g. behind
+   * CGNAT, where a Connection Request cannot reach the device).
+   */
+  private async buildInformResponseWithTasks(device: any): Promise<string> {
+    const task = await this.getNextPendingTask(device.id);
+    if (!task) {
+      return this.buildInformResponse(device, false);
+    }
+
+    const commandXml = await this.buildCwmpCommand(task, device.id);
+    const informResp = this.buildSoapResponse('InformResponse', {
+      MaxEnvelopes: 2,
+    });
+    const informStr = this.builder.build(informResp);
+
+    const informBody = informStr.replace(/^<\?xml[^>]*>\s*/, '');
+    const commandBody = commandXml.replace(/^<\?xml[^>]*>\s*/, '');
+    return `<?xml version="1.0" encoding="UTF-8"?>\n${informBody}\n${commandBody}`;
   }
 
   private buildGetRPCMethodsResponse(): string {
