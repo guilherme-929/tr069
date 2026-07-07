@@ -193,7 +193,33 @@ export class CwmpService {
       || paramMap['Device.ManagementServer.ConnectionRequestURL']
       || '';
 
-    if (connectionRequestUrl && (cleanClientIp || ipAddress)) {
+    // Prefer vWAN1_IP (public IP from CPE) over CGNAT/internal IPs for ConnectionRequestURL
+    // CPEs behind CGNAT often report the CGNAT IP in their ConnectionRequestURL, which ACS cannot reach.
+    const wan1Ip = paramMap['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress']
+      || paramMap['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress']
+      || '';
+    
+    if (wan1Ip && wan1Ip !== ipAddress && !privateIpRegex.test(wan1Ip)) {
+      try {
+        if (connectionRequestUrl) {
+          const urlObj = new URL(connectionRequestUrl);
+          // Replace hostname with public WAN IP when it appears to be CGNAT or internal
+          if (privateIpRegex.test(urlObj.hostname) && !privateIpRegex.test(wan1Ip)) {
+            urlObj.hostname = wan1Ip;
+            connectionRequestUrl = urlObj.toString();
+          }
+        }
+      } catch (e) {
+        // Fallback string replacement for malformed URLs
+        if (connectionRequestUrl) {
+          if (connectionRequestUrl.includes('0.0.0.0')) {
+            connectionRequestUrl = connectionRequestUrl.replace('0.0.0.0', wan1Ip);
+          } else if (connectionRequestUrl.includes('[::]')) {
+            connectionRequestUrl = connectionRequestUrl.replace('[::]', wan1Ip);
+          }
+        }
+      }
+    } else if (connectionRequestUrl && (cleanClientIp || ipAddress)) {
       const targetIp = cleanClientIp || ipAddress;
       try {
         const urlObj = new URL(connectionRequestUrl);
