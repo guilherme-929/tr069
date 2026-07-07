@@ -83,7 +83,9 @@ export class AcsService implements OnModuleInit {
         const xmlResponse = await this.cwmp.handleCwmp(body, serial || undefined, undefined, clientIp);
         this.updateSessionAfterResponse(serial, xmlResponse);
 
-        if (xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse')) {
+        const isInformResponse = xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse');
+
+        if (isInformResponse) {
           const infoSerial = serial || '';
           if (infoSerial) {
             const dev = await this.prisma.device.findUnique({ where: { serial: infoSerial } });
@@ -92,6 +94,9 @@ export class AcsService implements OnModuleInit {
                 where: { deviceId: dev.id, status: 'PENDING' },
                 orderBy: { createdAt: 'asc' },
               });
+              const existingSession = serial ? this.sessions.get(serial) : undefined;
+              const wasAlreadyReady = existingSession && existingSession.pendingTasks.length > 0;
+
               if (pendingTasks.length > 0) {
                 let session = this.sessions.get(infoSerial);
                 if (!session) {
@@ -104,6 +109,23 @@ export class AcsService implements OnModuleInit {
                 session.deviceId = dev.id;
                 session.tenantId = dev.tenantId || session.tenantId;
                 this.logger.log(`Device ${infoSerial} has ${pendingTasks.length} pending tasks — session set to READY`);
+
+                // If CPE was already in a READY session (previous InformResponse sent),
+                // respond with the pending command instead of another InformResponse.
+                // Some CPEs (ZTE) never send empty POST and expect commands in Inform responses.
+                if (wasAlreadyReady) {
+                  const task = pendingTasks[0];
+                  const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
+                  session.state = 'SENDING';
+                  await this.prisma.task.update({
+                    where: { id: task.id },
+                    data: { status: 'IN_PROGRESS' },
+                  });
+                  this.logger.log(`Device ${infoSerial} already READY — sending command "${task.type}" instead of InformResponse`);
+                  res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
+                  res.end(commandXml);
+                  return;
+                }
               } else {
                 const session = this.sessions.get(infoSerial);
                 if (session) {

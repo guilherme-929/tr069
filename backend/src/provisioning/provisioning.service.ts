@@ -106,8 +106,8 @@ export class ProvisioningService {
   }
 
   async getTasks(tenantId: string, query: { page?: number; limit?: number; status?: string }) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const page = parseInt(query.page as any, 10) || 1;
+    const limit = parseInt(query.limit as any, 10) || 20;
     const skip = (page - 1) * limit;
     const where: any = { tenantId, type: 'Provision' };
     if (query.status) where.status = query.status;
