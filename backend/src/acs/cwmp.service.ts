@@ -51,7 +51,7 @@ export class CwmpService {
         if (device) {
           const pending = await this.prisma.task.count({ where: { deviceId: device.id, status: 'PENDING' } });
           if (pending > 0) {
-            return this.buildInformResponseWithTasks(device);
+            return this.buildNextCommandResponse(device);
           }
         }
       }
@@ -1220,28 +1220,44 @@ export class CwmpService {
   }
 
   /**
-   * Builds the InformResponse envelope followed by the next queued command
-   * (GetParameterValues / GetParameterNames / SetParameterValues / Reboot / ...)
-   * in the same HTTP body. TR-069 allows multiple SOAP Envelopes per HTTP
-   * message when MaxEnvelopes > 1. This is how the ACS delivers pending tasks
-   * to a CPE that only opens the session on its periodic Inform (e.g. behind
-   * CGNAT, where a Connection Request cannot reach the device).
+   * Builds the next queued command (GetParameterValues / GetParameterNames /
+   * SetParameterValues / Reboot / ...) as a standalone SOAP envelope.
+   * Used in response to an empty POST from the CPE asking for commands.
+   * TR-069: after InformResponse, CPE sends empty POST, ACS replies with command.
    */
-  private async buildInformResponseWithTasks(device: any): Promise<string> {
+  private async buildNextCommandResponse(device: any): Promise<string> {
     const task = await this.getNextPendingTask(device.id);
     if (!task) {
-      return this.buildInformResponse(device, false);
+      return this.buildEmptySoapEnvelope();
     }
 
-    const commandXml = await this.buildCwmpCommand(task, device.id);
-    const informResp = this.buildSoapResponse('InformResponse', {
-      MaxEnvelopes: 2,
+    // Log command delivery for debugging via API
+    await this.prisma.log.create({
+      data: {
+        action: 'CMD_SEND',
+        entity: 'DEVICE',
+        entityId: device.id,
+        detail: `Sending ${task.type} (task=${task.id}) to ${device.serial}`,
+        deviceId: device.id,
+        tenantId: device.tenantId,
+      },
     });
-    const informStr = this.builder.build(informResp);
 
-    const informBody = informStr.replace(/^<\?xml[^>]*>\s*/, '');
+    const commandXml = await this.buildCwmpCommand(task, device.id);
     const commandBody = commandXml.replace(/^<\?xml[^>]*>\s*/, '');
-    return `<?xml version="1.0" encoding="UTF-8"?>\n${informBody}\n${commandBody}`;
+    return `<?xml version="1.0" encoding="UTF-8"?>\n${commandBody}`;
+  }
+
+  /**
+   * Builds InformResponse (without attached command) for the initial Inform.
+   * MaxEnvelopes=2 signals the CPE that more envelopes will follow in the
+   * session. The actual command is delivered on the next empty POST.
+   */
+  private async buildInformResponseWithTasks(device: any): Promise<string> {
+    const pendingCount = await this.prisma.task.count({
+      where: { deviceId: device.id, status: 'PENDING' },
+    });
+    return this.buildInformResponse(device, pendingCount > 0);
   }
 
   private buildGetRPCMethodsResponse(): string {
