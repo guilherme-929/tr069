@@ -102,6 +102,20 @@ export class CwmpService {
         return await this.handleFactoryResetResponse(body);
       }
 
+      if (body['SOAP-ENV:Fault'] || body['soap:Fault'] || body['Fault']) {
+        this.logger.warn(`CPE returned Fault: ${JSON.stringify(body['SOAP-ENV:Fault'] || body['soap:Fault'] || body['Fault']).slice(0, 200)}`);
+        if (this.lastSerial) {
+          const device = await this.prisma.device.findUnique({ where: { serial: this.lastSerial } });
+          if (device) {
+            await this.prisma.task.updateMany({
+              where: { deviceId: device.id, status: 'IN_PROGRESS' },
+              data: { status: 'FAILED', error: 'CPE returned SOAP Fault' },
+            });
+          }
+        }
+        return this.buildEmptySoapEnvelope();
+      }
+
       this.logger.warn(`Unhandled CWMP method: ${bodyKeys.join(', ')}`);
       return this.buildEmptySoapEnvelope();
     } catch (error) {

@@ -5,20 +5,10 @@ import { PrismaService } from '../common/prisma.service';
 import { CwmpService } from './cwmp.service';
 import { ConfigService } from '../system-config/config.service';
 
-interface CwmpSession {
-  serial: string;
-  deviceId: string;
-  state: 'INFORMED' | 'READY' | 'SENDING';
-  pendingTasks: any[];
-  currentTaskIndex: number;
-  tenantId: string;
-}
-
 @Injectable()
 export class AcsService implements OnModuleInit {
   private readonly logger = new Logger(AcsService.name);
   private server!: http.Server;
-  private sessions = new Map<string, CwmpSession>();
   private serialByIp = new Map<string, string>();
   private cachedTenantId: string | null = null;
 
@@ -63,14 +53,12 @@ export class AcsService implements OnModuleInit {
         const contentType = req.headers['content-type'] || '';
         const isSoap = contentType.includes('text/xml') || contentType.includes('application/soap') || body.includes('<soap:Envelope') || body.includes('<soapenv:Envelope') || body.includes('<SOAP-ENV:Envelope');
 
-        // If serial couldn't be resolved from body, try IP-based lookup
         if (!serial || serial === process.env.ACS_AUTH_USERNAME || serial === 'alemnet') {
           serial = this.serialByIp.get(clientIp) || serial || '';
         }
 
         this.logger.log(`CWMP req from ${serial || 'unknown'} (ip=${clientIp}): method=${req.method}, content-type=${contentType}, bodyLen=${bodyLen}, isSoap=${isSoap}`);
 
-        // Update IP→serial mapping when we have a real serial from body
         if (serial && isSoap && (body.includes('<Inform>') || body.includes('<cwmp:Inform>'))) {
           this.serialByIp.set(clientIp, serial);
         }
@@ -80,122 +68,56 @@ export class AcsService implements OnModuleInit {
           return;
         }
 
-        // ZTE CPE workaround: some CPEs never send empty POST after InformResponse,
-        // they reconnect with a new Inform instead. If session is READY with pending
-        // tasks, respond with the first pending command directly.
+        // Per TR-069, ACS MUST echo back the same cwmp:ID from the CPE's request.
+        // The ZTE F670L rejects responses with mismatched IDs.
+        const requestCwmpId = this.extractCwmpId(body);
+
         const xmlResponse = await this.cwmp.handleCwmp(body, serial || undefined, undefined, clientIp);
-        this.updateSessionAfterResponse(serial, xmlResponse);
+        const responseWithCorrectId = requestCwmpId
+          ? xmlResponse.replace(/(<cwmp:ID[^>]*>)[^<]+(<\/cwmp:ID>)/, `$1${requestCwmpId}$2`)
+          : xmlResponse;
 
-        const isInformResponse = xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse');
+        const isInformResponse = responseWithCorrectId.includes('InformResponse') || responseWithCorrectId.includes('cwmp:InformResponse');
+        const isCommandResponse = responseWithCorrectId.includes('SetParameterValuesResponse') ||
+          responseWithCorrectId.includes('GetParameterValuesResponse') ||
+          responseWithCorrectId.includes('GetParameterNamesResponse') ||
+          responseWithCorrectId.includes('DownloadResponse');
 
-        if (isInformResponse) {
-          const infoSerial = serial || '';
-          if (infoSerial) {
-            const dev = await this.prisma.device.findUnique({ where: { serial: infoSerial } });
-            if (dev) {
-              const pendingTasks = await this.prisma.task.findMany({
-                where: { deviceId: dev.id, status: 'PENDING' },
-                orderBy: { createdAt: 'asc' },
-              });
-              if (pendingTasks.length > 0) {
-                let session = this.sessions.get(infoSerial);
-                const wasReady = session && session.state === 'READY' && session.pendingTasks.length > 0;
+        // On every request, fail stale IN_PROGRESS tasks (> 5 min)
+        if (serial) {
+          await this.failStaleTasks(serial);
+        }
 
-                if (!session) {
-                  session = { serial: infoSerial, deviceId: dev.id, state: 'READY', pendingTasks: [], currentTaskIndex: 0, tenantId: dev.tenantId || '' };
-                  this.sessions.set(infoSerial, session);
-                }
-                session.pendingTasks = pendingTasks;
-                session.currentTaskIndex = 0;
-                session.state = 'READY';
-                session.deviceId = dev.id;
-                session.tenantId = dev.tenantId || session.tenantId;
-                this.logger.log(`Device ${infoSerial} has ${pendingTasks.length} pending tasks — session set to READY`);
-
-                // ZTE CPE workaround: some CPEs (e.g. ZTE F670L) never send the empty HTTP POST
-                // after InformResponse. Instead, they reconnect with a new Inform to poll for commands.
-                // If the session was already READY (from previous Inform), respond with the first
-                // pending command directly instead of another InformResponse.
-                if (wasReady && session.currentTaskIndex < session.pendingTasks.length) {
-                  const task = session.pendingTasks[session.currentTaskIndex];
-                  session.state = 'SENDING';
-                  session.currentTaskIndex++;
-                  const newAttempts = (task.attempts || 0) + 1;
-                  if (newAttempts >= (task.maxAttempts || 3)) {
-                    await this.prisma.task.update({
-                      where: { id: task.id },
-                      data: { status: 'FAILED', attempts: newAttempts },
-                    });
-                    this.logger.warn(`Device ${infoSerial} — task "${task.type}" failed after ${newAttempts} attempts`);
-                    // Remove failed task and rebuild remaining list
-                    const remaining = await this.prisma.task.findMany({
-                      where: { deviceId: dev.id, status: 'PENDING' },
-                      orderBy: { createdAt: 'asc' },
-                    });
-                    session.pendingTasks = remaining;
-                    session.currentTaskIndex = 0;
-                    session.state = remaining.length > 0 ? 'READY' : 'INFORMED';
-                  } else {
-                    await this.prisma.task.update({
-                      where: { id: task.id },
-                      data: { status: 'IN_PROGRESS', attempts: newAttempts },
-                    });
-                    const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
-                    this.logger.log(`Device ${infoSerial} reconnected (no empty POST) — sending command "${task.type}" (attempt ${newAttempts}/${task.maxAttempts || 3})`);
-                    res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
-                    res.end(commandXml);
-                    return;
-                  }
-                }
-              } else {
-                const session = this.sessions.get(infoSerial);
-                if (session) {
-                  session.pendingTasks = [];
-                  session.currentTaskIndex = 0;
-                }
-              }
-            }
+        // If we just got a command response AND there are more PENDING tasks, send next immediately
+        if (serial && isCommandResponse) {
+          const dev = await this.prisma.device.findUnique({ where: { serial } });
+          if (dev && await this.trySendNextTask(dev, res)) {
+            return;
           }
         }
 
-        // After any task response, if more tasks remain, send next immediately
-        if (serial && (
-          xmlResponse.includes('SetParameterValuesResponse') ||
-          xmlResponse.includes('GetParameterValuesResponse') ||
-          xmlResponse.includes('GetParameterNamesResponse') ||
-          xmlResponse.includes('DownloadResponse')
-        )) {
-          let deviceId = this.sessions.get(serial)?.deviceId || '';
-          if (!deviceId) {
-            const dev = await this.prisma.device.findUnique({ where: { serial } });
-            if (dev) deviceId = dev.id;
-          }
-          if (deviceId) {
-            const remaining = await this.prisma.task.findMany({
-              where: { deviceId, status: 'PENDING' },
-              orderBy: { createdAt: 'asc' },
-            });
-            if (remaining.length > 0) {
-              let session = this.sessions.get(serial);
-              if (!session) {
-                session = { serial, deviceId, state: 'READY', pendingTasks: [], currentTaskIndex: 0, tenantId: '' };
-                this.sessions.set(serial, session);
+        // InformResponse handling — always send InformResponse, then use DB flag
+        // to detect "second Inform" (reconnection) for ZTE CPEs that never send empty POST.
+        if (serial && isInformResponse) {
+          const dev = await this.prisma.device.findUnique({ where: { serial } });
+          if (dev) {
+            const params = (dev.parameters as Record<string, any>) || {};
+            const lastRespAt = params.__lastInformResponseAt
+              ? new Date(params.__lastInformResponseAt).getTime()
+              : 0;
+            const recentThreshold = Date.now() - 5 * 60 * 1000;
+            const isReconnection = lastRespAt > recentThreshold;
+
+            if (isReconnection) {
+              this.logger.log(`Device ${serial} reconnected (DB flag) — checking pending tasks`);
+              // Clear the flag so next Inform won't re-trigger
+              await this.clearLastInformResponseFlag(dev);
+              if (await this.trySendPendingTask(dev, res)) {
+                return;
               }
-              session.pendingTasks = remaining;
-              session.currentTaskIndex = 0;
-              session.state = 'READY';
-              session.deviceId = deviceId;
-              this.logger.log(`Device ${serial} has ${remaining.length} pending tasks after response — sending next command`);
-              const task = remaining[0];
-              const commandXml = await this.cwmp.buildCwmpCommand(task, deviceId);
-              session.state = 'SENDING';
-              await this.prisma.task.update({
-                where: { id: task.id },
-                data: { status: 'IN_PROGRESS' },
-              });
-              res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
-              res.end(commandXml);
-              return;
+            } else {
+              // First Inform or periodic — set flag for next reconnect
+              await this.setLastInformResponseFlag(dev);
             }
           }
         }
@@ -204,13 +126,105 @@ export class AcsService implements OnModuleInit {
           'Content-Type': 'text/xml; charset=utf-8',
           'SOAPServer': 'TR-069 ACS/1.0',
         });
-        res.end(xmlResponse);
+        res.end(responseWithCorrectId);
       } catch (error: any) {
         this.logger.error(`CWMP Error: ${error.message}`);
         res.writeHead(500);
         res.end(`<error>${error.message}</error>`);
       }
     });
+  }
+
+  private async trySendPendingTask(dev: any, res: http.ServerResponse): Promise<boolean> {
+    const pending = await this.prisma.task.findMany({
+      where: { deviceId: dev.id, status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (pending.length === 0) return false;
+
+    const task = pending[0];
+    const newAttempts = (task.attempts || 0) + 1;
+    if (newAttempts >= (task.maxAttempts || 3)) {
+      await this.prisma.task.update({
+        where: { id: task.id },
+        data: { status: 'FAILED', attempts: newAttempts },
+      });
+      this.logger.warn(`Device ${dev.serial} — task "${task.type}" failed after ${newAttempts} attempts`);
+      return false;
+    }
+
+    await this.prisma.task.update({
+      where: { id: task.id },
+      data: { status: 'IN_PROGRESS', attempts: newAttempts },
+    });
+    const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
+    this.logger.log(`Device ${dev.serial} — sending command "${task.type}" (attempt ${newAttempts}/${task.maxAttempts || 3})`);
+    res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
+    res.end(commandXml);
+    return true;
+  }
+
+  private async trySendNextTask(dev: any, res: http.ServerResponse): Promise<boolean> {
+    const remaining = await this.prisma.task.findMany({
+      where: { deviceId: dev.id, status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (remaining.length === 0) return false;
+
+    const task = remaining[0];
+    await this.prisma.task.update({
+      where: { id: task.id },
+      data: { status: 'IN_PROGRESS', attempts: { increment: 1 } },
+    });
+    const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
+    this.logger.log(`Sending next command "${task.type}" to device ${dev.serial}`);
+    res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
+    res.end(commandXml);
+    return true;
+  }
+
+  private async setLastInformResponseFlag(dev: any) {
+    const params = (dev.parameters as Record<string, any>) || {};
+    params.__lastInformResponseAt = new Date().toISOString();
+    await this.prisma.device.update({
+      where: { id: dev.id },
+      data: { parameters: params as any },
+    });
+    this.logger.log(`Device ${dev.serial} — set __lastInformResponseAt flag`);
+  }
+
+  private async clearLastInformResponseFlag(dev: any) {
+    const params = (dev.parameters as Record<string, any>) || {};
+    delete params.__lastInformResponseAt;
+    await this.prisma.device.update({
+      where: { id: dev.id },
+      data: { parameters: params as any },
+    });
+  }
+
+  private extractCwmpId(xml: string): string | null {
+    const match = xml.match(/<cwmp:ID[^>]*>([^<]+)<\/cwmp:ID>/);
+    return match ? match[1] : null;
+  }
+
+  private async failStaleTasks(serial: string) {
+    const dev = await this.prisma.device.findUnique({ where: { serial } });
+    if (!dev) return;
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const stale = await this.prisma.task.findMany({
+      where: {
+        deviceId: dev.id,
+        status: 'IN_PROGRESS',
+        updatedAt: { lt: fiveMinAgo },
+      },
+    });
+    for (const t of stale) {
+      await this.prisma.task.update({
+        where: { id: t.id },
+        data: { status: 'FAILED', error: 'Timed out waiting for CPE response' },
+      });
+      this.logger.warn(`Task "${t.type}" (${t.id}) stale — failed after 5 min`);
+    }
   }
 
   private resolveDeviceSerial(req: http.IncomingMessage, body: string): string | null {
@@ -239,42 +253,18 @@ export class AcsService implements OnModuleInit {
       return;
     }
 
-    let session = this.sessions.get(serial);
-    if (!session || session.state === 'INFORMED' || session.pendingTasks.length === 0) {
-      const device = (session?.deviceId)
-        ? await this.prisma.device.findUnique({ where: { id: session.deviceId } })
-        : await this.prisma.device.findUnique({ where: { serial } });
-      if (device) {
-        const pendingTasks = await this.prisma.task.findMany({
-          where: { deviceId: device.id, status: 'PENDING' },
-          orderBy: { createdAt: 'asc' },
-        });
-        session = {
-          serial,
-          deviceId: device.id,
-          state: 'READY',
-          pendingTasks,
-          currentTaskIndex: 0,
-          tenantId: device.tenantId,
-        };
-        this.sessions.set(serial, session);
+    const dev = await this.prisma.device.findUnique({ where: { serial } });
+    if (dev) {
+      const pendingTasks = await this.prisma.task.findMany({
+        where: { deviceId: dev.id, status: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (pendingTasks.length > 0) {
+        await this.trySendNextTask(dev, res);
+        return;
       }
     }
 
-    if (session && session.pendingTasks.length > 0 && session.currentTaskIndex < session.pendingTasks.length) {
-      const task = session.pendingTasks[session.currentTaskIndex];
-      const commandXml = await this.cwmp.buildCwmpCommand(task, session.deviceId);
-      session.state = 'SENDING';
-      await this.prisma.task.update({
-        where: { id: task.id },
-        data: { status: 'IN_PROGRESS' },
-      });
-      res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
-      res.end(commandXml);
-      return;
-    }
-
-    this.sessions.delete(serial);
     res.writeHead(200, { 'Content-Type': 'text/xml' });
     res.end(this.cwmp.buildEmptySoapEnvelope());
   }
@@ -286,108 +276,6 @@ export class AcsService implements OnModuleInit {
     if (!tenant) throw new Error('No tenant found. Run seed first.');
     this.cachedTenantId = tenant.id;
     return tenant.id;
-  }
-
-  private updateSessionAfterResponse(serial: string | null, xmlResponse: string) {
-    if (!serial) return;
-
-    if (xmlResponse.includes('InformResponse') || xmlResponse.includes('cwmp:InformResponse')) {
-      if (!this.sessions.has(serial)) {
-        const tid = this.cachedTenantId || 'default';
-        this.sessions.set(serial, {
-          serial,
-          deviceId: '',
-          state: 'INFORMED',
-          pendingTasks: [],
-          currentTaskIndex: 0,
-          tenantId: tid,
-        });
-      } else {
-        const session = this.sessions.get(serial)!;
-        // Always reset to INFORMED on new Inform — tasks reloaded from DB below
-        session.state = 'INFORMED';
-      }
-    }
-
-    // Mark task completed when CPE responds to commands
-    if (
-      xmlResponse.includes('SetParameterValuesResponse') ||
-      xmlResponse.includes('GetParameterValuesResponse') ||
-      xmlResponse.includes('GetParameterNamesResponse') ||
-      xmlResponse.includes('RebootResponse') ||
-      xmlResponse.includes('FactoryResetResponse') ||
-      xmlResponse.includes('DownloadResponse')
-    ) {
-      this.markTaskCompleted(serial);
-    }
-  }
-
-  getSession(serial: string): CwmpSession | undefined {
-    return this.sessions.get(serial);
-  }
-
-  setDeviceInSession(serial: string, deviceId: string, tenantId: string) {
-    const session = this.sessions.get(serial);
-    if (session) {
-      session.deviceId = deviceId;
-      session.tenantId = tenantId;
-    } else {
-      this.sessions.set(serial, {
-        serial,
-        deviceId,
-        state: 'INFORMED',
-        pendingTasks: [],
-        currentTaskIndex: 0,
-        tenantId,
-      });
-    }
-  }
-
-  markTaskCompleted(serial: string) {
-    const session = this.sessions.get(serial);
-    if (session) {
-      session.currentTaskIndex++;
-      session.state = 'READY';
-    }
-  }
-
-  endSession(serial: string) {
-    this.sessions.delete(serial);
-  }
-
-  private async validateAuth(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
-    const authHeader = req.headers['authorization'];
-    if (!authHeader || !authHeader.startsWith('Basic ')) {
-      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
-      res.end('Unauthorized');
-      return false;
-    }
-
-    const base64 = authHeader.slice(6);
-    const decoded = Buffer.from(base64, 'base64').toString('utf-8');
-    const colonIndex = decoded.indexOf(':');
-    if (colonIndex === -1) {
-      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
-      res.end('Unauthorized');
-      return false;
-    }
-
-    const username = decoded.slice(0, colonIndex);
-    const password = decoded.slice(colonIndex + 1);
-
-    // Try ConfigService first, then env vars
-    const configUser = await this.configService.getValue('default', 'acs.default.username');
-    const configPass = await this.configService.getValue('default', 'acs.default.password');
-    const expectedUser = configUser || process.env.ACS_AUTH_USERNAME || 'alemnet';
-    const expectedPass = configPass || process.env.ACS_AUTH_PASSWORD || 'alemnet';
-
-    if (username !== expectedUser || password !== expectedPass) {
-      this.logger.warn(`CWMP auth failed for user: ${username}`);
-      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
-      res.end('Unauthorized');
-      return false;
-    }
-    return true;
   }
 
   async getEffectiveAcsUrl(deviceId: string): Promise<string> {
@@ -526,5 +414,39 @@ export class AcsService implements OnModuleInit {
     ]);
 
     return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
+
+  private async validateAuth(req: http.IncomingMessage, res: http.ServerResponse): Promise<boolean> {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Basic ')) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
+      res.end('Unauthorized');
+      return false;
+    }
+
+    const base64 = authHeader.slice(6);
+    const decoded = Buffer.from(base64, 'base64').toString('utf-8');
+    const colonIndex = decoded.indexOf(':');
+    if (colonIndex === -1) {
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
+      res.end('Unauthorized');
+      return false;
+    }
+
+    const username = decoded.slice(0, colonIndex);
+    const password = decoded.slice(colonIndex + 1);
+
+    const configUser = await this.configService.getValue('default', 'acs.default.username');
+    const configPass = await this.configService.getValue('default', 'acs.default.password');
+    const expectedUser = configUser || process.env.ACS_AUTH_USERNAME || 'alemnet';
+    const expectedPass = configPass || process.env.ACS_AUTH_PASSWORD || 'alemnet';
+
+    if (username !== expectedUser || password !== expectedPass) {
+      this.logger.warn(`CWMP auth failed for user: ${username}`);
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="TR-069 ACS"' });
+      res.end('Unauthorized');
+      return false;
+    }
+    return true;
   }
 }

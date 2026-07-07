@@ -1,26 +1,19 @@
 #!/bin/bash
-TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+# Get auth token
+curl -s -X POST http://localhost:3000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@acs.local","password":"admin123"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+  -d '{"email":"admin@acs.local","password":"admin123"}' > /tmp/login.json
 
-DEVICE_ID="cmr3uhg6v00091hv8go5q0b15"
-echo "=== DEVICE INFO ==="
-curl -s "http://localhost:3000/api/devices/$DEVICE_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  | python3 -c "
+TOKEN=$(python3 -c 'import json; f=open("/tmp/login.json"); d=json.load(f); print(d.get("accessToken",""))')
+
+echo "=== All Tasks ==="
+curl -s "http://localhost:3000/api/tasks?limit=100" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c '
 import sys,json
 d=json.load(sys.stdin)
-tasks=d.get('tasks',[])
-pending=[t for t in tasks if t['status']=='PENDING']
-print(f'Status: {d[\"status\"]}')
-print(f'Last Inform: {d[\"lastInform\"]}')
-print(f'Total tasks: {len(tasks)}, Pending: {len(pending)}')
-for t in pending[:5]:
-    print(f'  - {t[\"type\"]} status={t[\"status\"]} created={t[\"createdAt\"]}')
-"
-
-echo ""
-echo "=== LOGS (latest 20) ==="
-cd /root/tr069
-docker compose logs --tail=20 backend 2>&1 | grep -iE 'inform|session|task|wifi|cwmp|connection'
+data = d.get("data", [])
+for t in data:
+    print(f"  {t.get(\"type\",\"?\")}: status={t.get(\"status\",\"?\")}, attempts={t.get(\"attempts\",0)}, error={t.get(\"error\",\"\")}")
+if not data:
+    print("  (no tasks)")
+'
