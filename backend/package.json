@@ -2,6 +2,9 @@
   "name": "tr069-acs-backend",
   "version": "1.0.0",
   "private": true,
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
@@ -10,9 +13,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "ts-node prisma/seed.ts",
-    "lint": "eslint \"{src,test}/**/*.ts\"",
-    "format": "prettier --write \"src/**/*.ts\""
+    "prisma:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@fastify/static": "^7.0.4",

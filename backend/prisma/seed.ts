@@ -6,14 +6,11 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  const tenant = await prisma.tenant.upsert({
-    where: { slug: 'default-isp' },
-    update: {},
-    create: {
-      name: 'Default ISP',
-      slug: 'default-isp',
-    },
-  });
+  const tenant = await prisma.tenant.findFirst({ where: { slug: 'default-isp' } });
+  if (tenant) {
+    console.log('📋 Database already has seed data, skipping...');
+    return;
+  }
 
   const adminPassword = await bcrypt.hash('admin123', 12);
   const techPassword = await bcrypt.hash('tech123', 12);
@@ -141,11 +138,7 @@ async function main() {
     },
   });
 
-  console.log('✅ Database seeded!');
-  console.log('📧 Login credentials:');
-  console.log('   admin@acs.local / admin123 (ADMIN)');
-  console.log('   tecnico@acs.local / tech123 (TECHNICIAN)');
-  console.log('   operador@acs.local / oper123 (OPERATOR)');
+  console.log('✅ Seed completed successfully!');
 }
 
 main()
