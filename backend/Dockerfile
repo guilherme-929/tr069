@@ -28,4 +28,11 @@ COPY package.json ./
 
 EXPOSE 3000 7547
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss --skip-generate && node dist/main"]
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 CMD wget -q --spider http://127.0.0.1:3000/api/docs || exit 1
+
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+
+CMD ["sh", "./entrypoint.sh"]
