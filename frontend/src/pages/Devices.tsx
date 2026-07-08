@@ -409,7 +409,7 @@ export default function Devices() {
                 {selected.tags?.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {selected.tags.map((tag: string) => (
-                      <span key={tag} className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">{tag}</span>
+                      <span key={String(tag)} className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">{String(tag)}</span>
                     ))}
                   </div>
                 )}
@@ -423,11 +423,11 @@ export default function Devices() {
                       value: String(val ?? '-'),
                     })) : []),
                     { label: 'Serial', value: selected.serial },
-                    { label: 'Product Class', value: (selected.parameters as any)?.['InternetGatewayDevice.DeviceInfo.ProductClass'] || (selected.parameters as any)?.['Device.DeviceInfo.ProductClass'] || '-' },
-                    { label: 'OUI', value: selected.oui || (selected.parameters as any)?.['InternetGatewayDevice.DeviceInfo.ManufacturerOUI'] || (selected.parameters as any)?.['Device.DeviceInfo.ManufacturerOUI'] || '-' },
-                    { label: 'Fabricante', value: selected.manufacturer || '-' },
-                    { label: 'Hardware', value: selected.model?.hwVersion || selected.hardwareVersion || '-' },
-                    { label: 'Software', value: selected.firmwareVersion || '-' },
+                    { label: 'Product Class', value: String((selected.parameters as any)?.['InternetGatewayDevice.DeviceInfo.ProductClass'] || (selected.parameters as any)?.['Device.DeviceInfo.ProductClass'] || '-') },
+                    { label: 'OUI', value: String(selected.oui || (selected.parameters as any)?.['InternetGatewayDevice.DeviceInfo.ManufacturerOUI'] || (selected.parameters as any)?.['Device.DeviceInfo.ManufacturerOUI'] || '-') },
+                    { label: 'Fabricante', value: String(selected.manufacturer || '-') },
+                    { label: 'Hardware', value: String(selected.model?.hwVersion || selected.hardwareVersion || '-') },
+                    { label: 'Software', value: String(selected.firmwareVersion || '-') },
                   ].map(f => (
                     <div key={f.label} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
                       <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">{f.label}</div>
@@ -542,10 +542,10 @@ export default function Devices() {
                       <tbody>
                         {connectedDevices.length > 0 ? connectedDevices.map((cd: any, i: number) => (
                           <tr key={i} className="border-b border-slate-100 dark:border-slate-800/50 last:border-0">
-                            <td className="px-3 py-2 font-semibold text-slate-900 dark:text-white">{cd.hostname || cd.name || '-'}</td>
-                            <td className="px-3 py-2 font-mono text-slate-600 dark:text-slate-400">{cd.ip || '-'}</td>
-                            <td className="px-3 py-2 font-mono text-slate-600 dark:text-slate-400">{cd.mac || '-'}</td>
-                            <td className="px-3 py-2">{cd.interface || (cd.isWireless !== undefined ? (cd.isWireless ? 'WiFi' : 'LAN') : '-')}</td>
+                            <td className="px-3 py-2 font-semibold text-slate-900 dark:text-white">{String(cd.hostname || cd.name || '-')}</td>
+                            <td className="px-3 py-2 font-mono text-slate-600 dark:text-slate-400">{String(cd.ip || '-')}</td>
+                            <td className="px-3 py-2 font-mono text-slate-600 dark:text-slate-400">{String(cd.mac || '-')}</td>
+                            <td className="px-3 py-2">{String(cd.interface || (cd.isWireless !== undefined ? (cd.isWireless ? 'WiFi' : 'LAN') : '-'))}</td>
                             <td className="px-3 py-2">
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cd.active !== false ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-400'}`}>
                                 {cd.active !== false ? 'Active' : 'Inactive'}
@@ -606,7 +606,7 @@ export default function Devices() {
                             rows.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
                             return rows.slice(0, 30).map((r, i) => (
                               <tr key={`${r.type}-${i}`} className="border-b border-slate-100 dark:border-slate-800/50 last:border-0">
-                                <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 font-semibold">{r.channel}</td>
+                                <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400 font-semibold">{String(r.channel)}</td>
                                 <td className="px-3 py-1.5">
                                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                                     r.code === 'COMPLETED' || r.code === '1' ? 'bg-success/10 text-success' :
@@ -614,7 +614,7 @@ export default function Devices() {
                                     r.code === 'IN_PROGRESS' || r.code === 'M' ? 'bg-warning/10 text-warning' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'
                                   }`}>{r.code}</span>
                                 </td>
-                                <td className="px-3 py-1.5 text-slate-900 dark:text-white truncate max-w-[160px]">{r.message}</td>
+                                <td className="px-3 py-1.5 text-slate-900 dark:text-white truncate max-w-[160px]">{String(r.message)}</td>
                                 <td className="px-3 py-1.5 text-slate-400 font-mono truncate max-w-[120px]">{r.detail}</td>
                                 <td className="px-3 py-1.5 text-center font-mono text-slate-500">{r.retries}</td>
                                 <td className="px-3 py-1.5 text-slate-400 whitespace-nowrap">{fmt(r.ts)}</td>
@@ -1180,7 +1180,7 @@ export default function Devices() {
                           <div className="w-1.5 h-1.5 mt-1.5 bg-primary rounded-full flex-shrink-0" />
                           <div className="min-w-0">
                             <p className="font-semibold text-slate-900 dark:text-white">{ev.code}</p>
-                            {ev.message && <p className="text-xs text-slate-500 truncate">{ev.message}</p>}
+                            {ev.message && <p className="text-xs text-slate-500 truncate">{String(ev.message)}</p>}
                             <p className="text-[10px] text-slate-400">{fmt(ev.createdAt)}</p>
                           </div>
                         </div>

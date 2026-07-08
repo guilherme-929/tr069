@@ -258,7 +258,7 @@ export default function Dashboard() {
           {liveLogs.map((log: any) => {
             const action = log.action || log.event || 'INFO';
             const time = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
-            const detail = typeof log.detail === 'string' ? log.detail : (log.message || JSON.stringify(log.data || ''));
+            const detail = typeof log.detail === 'string' ? log.detail : (typeof log.message === 'string' ? log.message : JSON.stringify(log.data || ''));
             return (
               <p key={log.id || Math.random()}>
                 <span className="text-slate-500">{time}</span>{' '}
