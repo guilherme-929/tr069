@@ -136,7 +136,7 @@ export default function Dashboard() {
                 <AlertTriangle size={18} className="text-danger" />
                 <div>
                   <p className="text-sm font-semibold text-slate-900 dark:text-white">{alert.title || alert.message || 'Alert'}</p>
-                  <p className="text-xs text-slate-500">{alert.description || alert.detail || ''}</p>
+                  <p className="text-xs text-slate-500">{alert.description || (typeof alert.detail === 'string' ? alert.detail : '')}</p>
                   <p className="text-[10px] font-medium text-slate-400 mt-1 uppercase">
                     {alert.createdAt ? new Date(alert.createdAt).toLocaleString() : ''}
                   </p>
@@ -258,7 +258,7 @@ export default function Dashboard() {
           {liveLogs.map((log: any) => {
             const action = log.action || log.event || 'INFO';
             const time = log.createdAt ? new Date(log.createdAt).toLocaleString() : '';
-            const detail = log.detail || log.message || JSON.stringify(log.data || '');
+            const detail = typeof log.detail === 'string' ? log.detail : (log.message || JSON.stringify(log.data || ''));
             return (
               <p key={log.id || Math.random()}>
                 <span className="text-slate-500">{time}</span>{' '}

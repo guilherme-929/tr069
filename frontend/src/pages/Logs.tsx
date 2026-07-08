@@ -54,7 +54,7 @@ export default function Logs() {
                   }`}>{log.action}</span>
                   <span className="text-xs text-slate-400">{new Date(log.createdAt).toLocaleString()}</span>
                 </div>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{log.detail}</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{typeof log.detail === 'string' ? log.detail : JSON.stringify(log.detail)}</p>
                 {log.user && <p className="text-[10px] text-slate-400 mt-0.5">by {log.user.name}</p>}
               </div>
             </div>
