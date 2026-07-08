@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CwmpService } from '../acs/cwmp.service';
 import { ConfigService } from '../system-config/config.service';
@@ -17,7 +17,7 @@ export class DevicesService {
 
   constructor(
     private prisma: PrismaService,
-    private cwmpService: CwmpService,
+    @Inject(forwardRef(() => CwmpService)) private cwmpService: CwmpService,
     private configService: ConfigService,
   ) {}
 
