@@ -348,40 +348,61 @@ export class CwmpService {
       },
     });
 
-    const acsUrl = process.env.ACS_PUBLIC_URL || `http://${ipAddress || 'localhost'}:${process.env.ACS_PORT || '7547'}`;
-    const expectedAcsUrl = `${acsUrl}/cwmp`;
-    const currentAcsUrl = paramMap['Device.ManagementServer.URL']
-      || paramMap['InternetGatewayDevice.ManagementServer.URL']
-      || paramMap['ManagementServer.URL']
-      || '';
+    // Auto-provisioning: apply model defaults + fix ACS URL on first boot
+    const isNewDevice = !device?.createdAt || (Date.now() - new Date(device.createdAt).getTime() < 120000);
+    const provisionedAt = (device?.parameters as any)?.__provisionedAt__;
+    const needsProvision = !provisionedAt || isNewDevice;
+    const existingProvTask = await this.prisma.task.count({
+      where: { deviceId: device.id, status: { in: ['PENDING', 'IN_PROGRESS'] }, type: 'Provision' },
+    });
 
-    if (currentAcsUrl && currentAcsUrl !== expectedAcsUrl && currentAcsUrl !== '0.0.0.0') {
-      const existingActive = await this.prisma.task.count({
-        where: { deviceId: device.id, status: { in: ['PENDING', 'IN_PROGRESS'] }, type: 'Provision' },
-      });
-      if (existingActive === 0) {
-        const informInterval = await this.configService.getValue('default', 'cwmp.inform.interval') || '300';
-        const periodicInformEnable = await this.configService.getValue('default', 'device.default.periodicInformEnable') || 'true';
-        this.logger.log(`Auto-provisioning device ${serial} — ACS URL mismatch: "${currentAcsUrl}" !== "${expectedAcsUrl}"`);
-        await this.prisma.task.create({
-          data: {
-            deviceId: device.id,
-            type: 'Provision',
-            status: 'PENDING',
-            payload: {
-              parameters: {
-                'Device.ManagementServer.URL': expectedAcsUrl,
-                'Device.ManagementServer.PeriodicInformInterval': informInterval,
-                'Device.ManagementServer.PeriodicInformEnable': periodicInformEnable,
-                'InternetGatewayDevice.ManagementServer.URL': expectedAcsUrl,
-                'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': informInterval,
-                'InternetGatewayDevice.ManagementServer.PeriodicInformEnable': periodicInformEnable,
-              },
-            },
-            tenantId: device.tenantId,
-          },
-        });
+    if (needsProvision && existingProvTask === 0) {
+      const acsUrl = device.acsPublicUrlOverride
+        || process.env.ACS_PUBLIC_URL
+        || `http://${ipAddress || 'localhost'}:${process.env.ACS_PORT || '7547'}`;
+      const expectedAcsUrl = `${acsUrl}/cwmp`;
+      const informInterval = await this.configService.getValue('default', 'cwmp.inform.interval') || '300';
+      const periodicInformEnable = await this.configService.getValue('default', 'device.default.periodicInformEnable') || 'true';
+
+      // Build params from model defaults if available
+      let modelParams: Record<string, string> = {};
+      if (device.modelId) {
+        const model = await this.prisma.deviceModel.findUnique({ where: { id: device.modelId } });
+        if (model?.defaultParameters) {
+          modelParams = model.defaultParameters as Record<string, string>;
+        }
       }
+
+      const provisionParams: Record<string, string> = {
+        ...modelParams,
+        'Device.ManagementServer.URL': expectedAcsUrl,
+        'Device.ManagementServer.PeriodicInformInterval': informInterval,
+        'Device.ManagementServer.PeriodicInformEnable': periodicInformEnable,
+        'InternetGatewayDevice.ManagementServer.URL': expectedAcsUrl,
+        'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': informInterval,
+        'InternetGatewayDevice.ManagementServer.PeriodicInformEnable': periodicInformEnable,
+      };
+
+      this.logger.log(`[PROVISION] Auto-provisioning device ${serial} (model: ${device.modelName}, new: ${isNewDevice})`);
+
+      await this.prisma.task.create({
+        data: {
+          deviceId: device.id,
+          type: 'Provision',
+          status: 'PENDING',
+          payload: { parameters: provisionParams },
+          tenantId: device.tenantId,
+        },
+      });
+
+      // Mark as provisioned so we don't re-provision on every periodic inform
+      const currentParams = (device.parameters as Record<string, any>) || {};
+      await this.prisma.device.update({
+        where: { id: device.id },
+        data: {
+          parameters: { ...currentParams, __provisionedAt__: new Date().toISOString() } as any,
+        },
+      });
     }
 
     // Auto-discover parameters on first boot or when discovery is empty
