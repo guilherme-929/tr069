@@ -826,17 +826,11 @@ export class CwmpService {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');
 
-    // Cap the instance to the CPE's real WiFi instance count (from
-    // DeviceSummary "WiFi:N") to avoid writing to a non-existent instance
-    // (which the CPE rejects with SOAP Fault 9005). Fall back to 8.
-    let maxWifiInstances = 8;
-    const summary = (device.parameters as Record<string, string>)['InternetGatewayDevice.DeviceSummary'] || '';
-    const wifiMatch = summary.match(/WiFi:(\d+)/);
-    if (wifiMatch) {
-      const reported = parseInt(wifiMatch[1], 10);
-      if (reported > 0 && reported < maxWifiInstances) maxWifiInstances = reported;
-    }
-    const instance = Math.min(Math.max(parseInt(String(params.instance ?? 1), 10) || 1, 1), maxWifiInstances);
+    // Cap the instance at the TR-098 maximum of 8 (GenieACS scans the same
+    // range; the CPE omits instances it does not implement). Instance 5 is a
+    // valid 5GHz radio on many ZTE CPEs, so we must NOT clamp it to the
+    // DeviceSummary "WiFi:N" value.
+    const instance = Math.min(Math.max(parseInt(String(params.instance ?? 1), 10) || 1, 1), 8);
 
     const currentParams = (device.parameters as Record<string, string>) || {};
     const hasWLAN = Object.keys(currentParams).some((k) =>
@@ -914,17 +908,31 @@ export class CwmpService {
 
     const params = (device.parameters as Record<string, string>) || {};
 
-    // Some CPEs expose fewer WiFi instances than the hardcoded maximum of 8.
-    // Querying a non-existent instance (e.g. SSID.3..8 on a WiFi:2 device)
-    // makes the CPE reject the whole GetParameterValues with SOAP Fault 9005
-    // "Invalid parameter name". Derive the real instance count from the CPE's
-    // reported DeviceSummary (e.g. "...WiFi:2...") and fall back to 8.
-    let maxWifiInstances = 8;
-    const summary = params['InternetGatewayDevice.DeviceSummary'] || '';
-    const wifiMatch = summary.match(/WiFi:(\d+)/);
-    if (wifiMatch) {
-      const reported = parseInt(wifiMatch[1], 10);
-      if (reported > 0 && reported < maxWifiInstances) maxWifiInstances = reported;
+    // Determine which WiFi instances this CPE actually exposes. GenieACS does
+    // this via parameter discovery (GetParameterNames) and only queries the
+    // instances the CPE reports. We replicate that: if the device has already
+    // been discovered, derive the instance set from the discovered leaves
+    // (e.g. WLANConfiguration.5.SSID -> instance 5). When discovery is still
+    // empty we fall back to scanning instances 1..8 (the TR-098 maximum), the
+    // same broad scan GenieACS performs — the CPE simply omits instances it
+    // does not implement, and a single missing instance does NOT fault the
+    // whole request as long as we stay within one namespace.
+    const discovered = (params.__discovered__ as any) || {};
+    const leaves: string[] = discovered._leaves || [];
+    const discoveredInstances = new Set<number>();
+    const instanceRe = /WLANConfiguration\.(\d+)\.|\.WIFI\.SSID\.(\d+)\.|\.WiFi\.SSID\.(\d+)\./;
+    for (const leaf of leaves) {
+      const m = leaf.match(instanceRe);
+      if (m) {
+        const inst = parseInt(m[1] || m[2] || m[3], 10);
+        if (inst > 0) discoveredInstances.add(inst);
+      }
+    }
+    let instances: number[];
+    if (discoveredInstances.size > 0) {
+      instances = Array.from(discoveredInstances).sort((a, b) => a - b);
+    } else {
+      instances = Array.from({ length: 8 }, (_, i) => i + 1);
     }
 
     // Detect which WiFi namespace this CPE actually exposes. TR-098 defines
@@ -950,7 +958,7 @@ export class CwmpService {
     const useZTE = hasZTE;
 
     const wifiPaths: string[] = [];
-    for (let i = 1; i <= maxWifiInstances; i++) {
+    for (const i of instances) {
       if (useZTE) {
         // ZTE (TR-098 variant) — uses InternetGatewayDevice.LANDevice.1.WIFI.*
         // SSID/KeyPassphrase live under WIFI.SSID.{i} and WIFI.AccessPoint.{i}.
@@ -994,7 +1002,7 @@ export class CwmpService {
     // partial cache (e.g. only `Enable` or `Channel` populated) used to make
     // the UI render blank WLAN cards.
     const knownInstances = new Set<number>();
-    for (let i = 1; i <= maxWifiInstances; i++) {
+    for (const i of instances) {
       const ssid = params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`]
         || params[`Device.WiFi.SSID.${i}.SSID`]
         || params[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`]
