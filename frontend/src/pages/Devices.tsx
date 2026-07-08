@@ -437,71 +437,87 @@ export default function Devices() {
                 </div>
 
                 {/* WiFi Section — only shown when data available */}
-                {(() => {
-                  const p = selected.parameters as Record<string, string> || {};
-                  const hasWifi = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
-                    || p['Device.WiFi.SSID.1.SSID']
-                    || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.SSID']
-                    || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.1.SSID'];
-                  if (!hasWifi) return null;
-                  return (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <section>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                          <Wifi size={13} className="inline mr-1.5 -mt-0.5" />
-                          Interface WiFi 2.4GHz
-                        </h4>
-                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
-                          {(() => {
-                            const ssid = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.SSID']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.1.SSID'] || '-';
-                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
-                              || p['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.1.Security.KeyPassphrase'] || '-';
-                            const ch = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel'] || '-';
-                            const sta = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.Status'] || '-';
-                            const assoc = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations'] || '0';
-                            return (<>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Canal</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ch}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Status</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{sta}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Clientes Conectados</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{assoc}</span></div>
-                            </>);
-                          })()}
-                        </div>
-                      </section>
-                      <section>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                          <Wifi size={13} className="inline mr-1.5 -mt-0.5" />
-                          Interface WiFi 5GHz
-                        </h4>
-                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
-                          {(() => {
-                            const ssid = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.5.SSID']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.5.SSID'] || '-';
-                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.5.Security.KeyPassphrase'] || '-';
-                            const ch = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel'] || '-';
-                            const sta = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status']
-                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.5.Status'] || '-';
-                            const assoc = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations'] || '0';
-                            return (<>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Canal</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ch}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Status</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{sta}</span></div>
-                              <div className="flex justify-between text-xs"><span className="text-slate-500">Clientes Conectados</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{assoc}</span></div>
-                            </>);
-                          })()}
-                        </div>
-                      </section>
-                    </div>
-                  );
-                })()}
+                 {(() => {
+                   const p = selected.parameters as Record<string, string> || {};
+                   // Discover every WiFi instance the CPE actually exposes, by
+                   // scanning all namespaces (TR-098 WLANConfiguration.*, TR-181
+                   // Device.WiFi.SSID.* and the ZTE WIFI.* variant). Mirrors the
+                   // GenieACS behaviour of listing all radios with their state
+                   // (active/disabled) instead of only fixed instances 1 and 5.
+                   const instances = new Set<number>();
+                   const addInst = (prefix: string) => {
+                     Object.keys(p).forEach((k) => {
+                       const m = k.match(new RegExp('^' + prefix.replace(/[.*]/g, '\\$&') + '\\.(\\d+)\\.SSID$'));
+                       if (m) instances.add(parseInt(m[1], 10));
+                     });
+                   };
+                   addInst('InternetGatewayDevice.LANDevice.1.WLANConfiguration');
+                   addInst('InternetGatewayDevice.LANDevice.1.WIFI.SSID');
+                   addInst('Device.WiFi.SSID');
+                   if (instances.size === 0) return null;
+                   const sorted = Array.from(instances).sort((a, b) => a - b);
+                   const bandFor = (i: number): string => {
+                     const std = p[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Standard`]
+                       || p[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Standard`] || '';
+                     const freq = p[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`]
+                       || p[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.X_ZTE-COM_OperatingFrequencyBand`] || '';
+                     if (/5|ac|ax/.test(std) || /5\.?GHz/i.test(freq)) return '5GHz';
+                     if (/2\.?4/.test(freq) || /b,g|n/.test(std)) return '2.4GHz';
+                     return i === 1 ? '2.4GHz' : `${i}`;
+                   };
+                   const get = (i: number, ...keys: string[]) => {
+                     for (const k of keys) if (p[k] !== undefined && p[k] !== '') return p[k];
+                     return '-';
+                   };
+                   return (
+                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                       {sorted.map((i) => {
+                         const enable = String(
+                           p[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Enable`]
+                           ?? p[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Enable`]
+                           ?? p[`Device.WiFi.SSID.${i}.Enable`]
+                           ?? ''
+                         );
+                         const active = enable === '1' || enable.toLowerCase() === 'true';
+                         const ssid = get(i,
+                           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`,
+                           `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`,
+                           `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`,
+                           `Device.WiFi.SSID.${i}.SSID`);
+                         const pass = get(i,
+                           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.KeyPassphrase`,
+                           `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Security.KeyPassphrase`,
+                           `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`);
+                         const ch = get(i,
+                           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Channel`,
+                           `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Channel`);
+                         const sta = get(i,
+                           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Status`,
+                           `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Status`);
+                         const assoc = get(i,
+                           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`);
+                         return (
+                           <section key={i}>
+                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+                               <Wifi size={13} className="inline mr-1.5 -mt-0.5" />
+                               Interface WiFi {bandFor(i)} (instância {i})
+                               <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold ${active ? 'bg-success/15 text-success' : 'bg-slate-200 text-slate-500'}`}>
+                                 {active ? 'ATIVO' : 'DESATIVADO'}
+                               </span>
+                             </h4>
+                             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
+                               <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
+                               <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
+                               <div className="flex justify-between text-xs"><span className="text-slate-500">Canal</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ch}</span></div>
+                               <div className="flex justify-between text-xs"><span className="text-slate-500">Status</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{sta}</span></div>
+                               <div className="flex justify-between text-xs"><span className="text-slate-500">Clientes Conectados</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{assoc}</span></div>
+                             </div>
+                           </section>
+                         );
+                       })}
+                     </div>
+                   );
+                 })()}
 
                 {/* Reported Parameters from Inform */}
                 <section>
