@@ -826,7 +826,17 @@ export class CwmpService {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');
 
-    const instance = Math.min(Math.max(parseInt(String(params.instance ?? 1), 10) || 1, 1), 8);
+    // Cap the instance to the CPE's real WiFi instance count (from
+    // DeviceSummary "WiFi:N") to avoid writing to a non-existent instance
+    // (which the CPE rejects with SOAP Fault 9005). Fall back to 8.
+    let maxWifiInstances = 8;
+    const summary = (device.parameters as Record<string, string>)['InternetGatewayDevice.DeviceSummary'] || '';
+    const wifiMatch = summary.match(/WiFi:(\d+)/);
+    if (wifiMatch) {
+      const reported = parseInt(wifiMatch[1], 10);
+      if (reported > 0 && reported < maxWifiInstances) maxWifiInstances = reported;
+    }
+    const instance = Math.min(Math.max(parseInt(String(params.instance ?? 1), 10) || 1, 1), maxWifiInstances);
 
     const currentParams = (device.parameters as Record<string, string>) || {};
     const hasWLAN = Object.keys(currentParams).some((k) =>
@@ -836,7 +846,13 @@ export class CwmpService {
     const hasZTE = Object.keys(currentParams).some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
-    const useZTE = hasZTE || (!hasWLAN && !hasTR181);
+    // Default to the TR-098 WLANConfiguration.* namespace (the spec standard
+    // that this ZTE fleet implements). Only use WIFI.* / Device.WiFi.* when the
+    // cache already confirms the CPE exposes those namespaces, otherwise the
+    // CPE rejects SetParameterValues with SOAP Fault 9005.
+    const useZTE = hasZTE;
+    const useTR181 = hasTR181 && !hasZTE && !hasWLAN;
+    const useWLAN = hasWLAN || (!hasZTE && !hasTR181);
 
     let wifiParams: { name: string; value: string }[];
     if (useZTE) {
@@ -847,7 +863,7 @@ export class CwmpService {
         { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.SSID`, value: params.ssid },
         { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.Enable`, value: '1' },
       ];
-    } else if (hasTR181) {
+    } else if (useTR181) {
       wifiParams = [
         { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
         { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },

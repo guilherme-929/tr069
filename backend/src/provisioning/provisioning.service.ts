@@ -39,10 +39,12 @@ export class ProvisioningService {
 
     const wifiConfig = (device.tenant.defaultWiFiConfig as Record<string, string>) || {};
     if (wifiConfig.ssid && wifiConfig.password) {
+      // Use the TR-098 WLANConfiguration.* namespace (the spec standard that
+      // this ZTE fleet implements). Avoid Device.WiFi.* (TR-181) here since a
+      // SetParameterValues with a non-existent path makes the CPE reject the
+      // whole request with SOAP Fault 9005.
       paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] = wifiConfig.ssid;
       paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] = wifiConfig.password;
-      paramsWithCr['Device.WiFi.SSID.1.SSID'] = wifiConfig.ssid;
-      paramsWithCr['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] = wifiConfig.password;
     }
 
     // Read parameter overrides from System Config (prefix: provision.param.)
