@@ -953,63 +953,36 @@ export class CwmpService {
     if (!device) throw new Error('Device not found');
 
     const params = (device.parameters as Record<string, string>) || {};
+
     const connectedDevices: any[] = [];
 
-    // TR-098 (WLANConfiguration) + ZTE WIFI.AssociatedDevice variants
-    const readAssociated = (wlan: number, devIndex: number) => {
-      const igd = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${wlan}.AssociatedDevice.${devIndex}`;
-      const zte = `InternetGatewayDevice.LANDevice.1.WIFI.AssociatedDevice.${devIndex}`;
-      const mac = params[`${zte}.AssociatedDeviceMACAddress`]
-        || params[`${zte}.MACAddress`]
-        || params[`${igd}.AssociatedDeviceMACAddress`]
-        || params[`${igd}.X_ZTE-COM_MACAddress`];
-      if (!mac) return null;
-      return {
-        wlan,
-        mac,
-        name: params[`${zte}.X_ZTE-COM_AssociatedDeviceName`]
-          || params[`${igd}.X_ZTE-COM_AssociatedDeviceName`] || '',
-        ip: params[`${zte}.AssociatedDeviceIPAddress`]
-          || params[`${igd}.AssociatedDeviceIPAddress`] || '',
-        rssi: parseInt(params[`${zte}.AssociatedDeviceRssi`]
-          || params[`${igd}.AssociatedDeviceRssi`] || '0'),
-        snr: parseInt(params[`${zte}.X_ZTE-COM_WLAN_SNR`]
-          || params[`${igd}.X_ZTE-COM_WLAN_SNR`] || '0'),
-        noise: parseInt(params[`${zte}.X_ZTE-COM_WLAN_Noise`]
-          || params[`${igd}.X_ZTE-COM_WLAN_Noise`] || '0'),
-        bandwidth: params[`${zte}.AssociatedDeviceBandWidth`]
-          || params[`${igd}.AssociatedDeviceBandWidth`] || '',
-        txRate: parseInt(params[`${zte}.X_ZTE-COM_TXRate`]
-          || params[`${zte}.AssociatedDeviceRate`]
-          || params[`${igd}.X_ZTE-COM_TXRate`]
-          || params[`${igd}.AssociatedDeviceRate`] || '0'),
-        rxRate: parseInt(params[`${zte}.X_ZTE-COM_RXRate`]
-          || params[`${igd}.X_ZTE-COM_RXRate`] || '0'),
-        bytesReceived: parseInt(params[`${zte}.X_ZTE-COM_WLAN_BytesReceived`]
-          || params[`${igd}.X_ZTE-COM_WLAN_BytesReceived`] || '0'),
-        bytesSent: parseInt(params[`${zte}.X_ZTE-COM_WLAN_BytesSend`]
-          || params[`${igd}.X_ZTE-COM_WLAN_BytesSend`] || '0'),
-        stayTime: params[`${zte}.X_ZTE-COM_StayTime`]
-          || params[`${igd}.X_ZTE-COM_StayTime`] || '0',
-        radio: params[`${zte}.X_ZTE-COM_WLAN_Radio`]
-          || params[`${igd}.X_ZTE-COM_WLAN_Radio`] || '',
-        clientMode: params[`${zte}.X_ZTE-COM_WLAN_ClientMode`]
-          || params[`${igd}.X_ZTE-COM_WLAN_ClientMode`] || '',
-        clientChannelWidth: params[`${zte}.X_ZTE-COM_WLAN_ClientChannelWidth`]
-          || params[`${igd}.X_ZTE-COM_WLAN_ClientChannelWidth`] || '',
-        signalStrength: parseInt(params[`${zte}.X_ZTE-COM_SignalStrength`]
-          || params[`${zte}.X_ZTE-COM_WLAN_RSSI`]
-          || params[`${igd}.X_ZTE-COM_SignalStrength`]
-          || params[`${igd}.X_ZTE-COM_WLAN_RSSI`] || '0'),
-      };
-    };
-
+    // Para cada WLANConfiguration (1-8)
     for (let wlan = 1; wlan <= 8; wlan++) {
       let devIndex = 1;
       while (true) {
-        const cd = readAssociated(wlan, devIndex);
-        if (!cd) break;
-        connectedDevices.push(cd);
+        const basePath = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${wlan}.AssociatedDevice.${devIndex}`;
+        const mac = params[`${basePath}.AssociatedDeviceMACAddress`];
+        if (!mac) break;
+
+        connectedDevices.push({
+          wlan,
+          mac,
+          name: params[`${basePath}.X_ZTE-COM_AssociatedDeviceName`] || '',
+          ip: params[`${basePath}.AssociatedDeviceIPAddress`] || '',
+          rssi: parseInt(params[`${basePath}.AssociatedDeviceRssi`] || '0'),
+          snr: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_SNR`] || '0'),
+          noise: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_Noise`] || '0'),
+          bandwidth: params[`${basePath}.AssociatedDeviceBandWidth`] || '',
+          txRate: parseInt(params[`${basePath}.X_ZTE-COM_TXRate`] || '0'),
+          rxRate: parseInt(params[`${basePath}.X_ZTE-COM_RXRate`] || '0'),
+          bytesReceived: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_BytesReceived`] || '0'),
+          bytesSend: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_BytesSend`] || '0'),
+          stayTime: params[`${basePath}.X_ZTE-COM_StayTime`] || '0',
+          radio: params[`${basePath}.X_ZTE-COM_WLAN_Radio`] || '',
+          clientMode: params[`${basePath}.X_ZTE-COM_WLAN_ClientMode`] || '',
+          clientChannelWidth: params[`${basePath}.X_ZTE-COM_WLAN_ClientChannelWidth`] || '',
+          signalStrength: parseInt(params[`${basePath}.X_ZTE-COM_SignalStrength`] || '0'),
+        });
         devIndex++;
       }
     }
