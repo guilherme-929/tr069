@@ -1,12 +1,24 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CwmpService } from '../acs/cwmp.service';
+import { ConfigService } from '../system-config/config.service';
+
+export interface VpDefinition {
+  paths: string[];
+  label: string;
+  description?: string;
+  transform?: 'first' | 'concat' | 'join';
+  separator?: string;
+}
 
 @Injectable()
 export class DevicesService {
+  private readonly logger = new Logger(DevicesService.name);
+
   constructor(
     private prisma: PrismaService,
     private cwmpService: CwmpService,
+    private configService: ConfigService,
   ) {}
 
   async findAll(
@@ -117,71 +129,117 @@ export class DevicesService {
     });
   }
 
+  async getVirtualParameterDefinitions(tenantId?: string): Promise<Map<string, VpDefinition>> {
+    const where: any = { category: 'virtual' };
+    if (tenantId) where.tenantId = tenantId;
+    const configs = await this.prisma.config.findMany({ where });
+
+    const defs = new Map<string, VpDefinition>();
+    for (const c of configs) {
+      const name = c.key.replace(/^virtualparam\./, '');
+      let def: VpDefinition;
+      try {
+        def = JSON.parse(c.value);
+      } catch {
+        def = { paths: [c.value], label: name };
+      }
+      defs.set(name, def);
+    }
+    return defs;
+  }
+
+  async computeVirtualParameters(
+    params: Record<string, string>,
+    defs: Map<string, VpDefinition>,
+  ): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+
+    for (const [name, def] of defs) {
+      const values: string[] = [];
+
+      for (const path of def.paths) {
+        const found = params[path];
+        if (found !== undefined && found !== '') {
+          values.push(found);
+        }
+      }
+
+      if (values.length === 0) continue;
+
+      const transform = def.transform || 'first';
+      switch (transform) {
+        case 'concat':
+          result[name] = values.join('');
+          break;
+        case 'join':
+          result[name] = values.join(def.separator || ', ');
+          break;
+        case 'first':
+        default:
+          result[name] = values[0];
+          break;
+      }
+    }
+
+    return result;
+  }
+
   async getVirtualParameters(id: string) {
     const device = await this.prisma.device.findUnique({ where: { id } });
     if (!device) throw new NotFoundException('Device not found');
 
     const params = (device.parameters as Record<string, string>) || {};
+    const defs = await this.getVirtualParameterDefinitions(device.tenantId);
 
-    const extractIp = (path: string): string => {
-      for (const k of Object.keys(params)) {
-        if (k.startsWith(path)) return params[k] || '';
-      }
-      return '';
-    };
+    const computed = await this.computeVirtualParameters(params, defs);
 
-    const vLoginPPPoE = params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username']
-      || params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.Username']
-      || '';
-
-    const vWAN1_IP = params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress']
-      || params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress']
-      || extractIp('InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1')
-      || '';
-
-    const vWAN2_IP = params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANIPConnection.1.ExternalIPAddress']
-      || params['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.2.WANPPPConnection.1.ExternalIPAddress']
-      || '';
-
-    const vIP_Voip = params['InternetGatewayDevice.VoiceService.1.VoIPProfile.1.SIP.ProxyServer']
-      || '';
-
-    const wifiBands: { band: string; ssid: string; channel: string; status: string; standard: string; associations: string }[] = [];
-    for (let i = 1; i <= 8; i++) {
-      const prefix = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}`;
-      const zteSsidPrefix = `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}`;
-      const zteApPrefix = `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}`;
-      const ssid = params[`${prefix}.SSID`]
-        || params[`${zteSsidPrefix}.SSID`]
-        || params[`${zteApPrefix}.SSID`];
-      if (ssid) {
-        const band = params[`${prefix}.X_ZTE-COM_OperatingFrequencyBand`]
-          || params[`${prefix}.X_ZTE-COM_WLAN_SupportedFrequencyBands`]
-          || params[`${zteSsidPrefix}.X_ZTE-COM_OperatingFrequencyBand`]
-          || `WLAN${i}`;
-        wifiBands.push({
-          band,
-          ssid,
-          channel: params[`${prefix}.Channel`] || '',
-          status: params[`${prefix}.Status`] || params[`${zteSsidPrefix}.Status`] || '',
-          standard: params[`${prefix}.Standard`] || '',
-          associations: params[`${prefix}.TotalAssociations`] || '0',
-        });
-      }
+    const results: Record<string, { label: string; value: string; description?: string }> = {};
+    for (const [name, value] of Object.entries(computed)) {
+      const def = defs.get(name);
+      results[name] = {
+        label: def?.label || name,
+        value,
+        description: def?.description,
+      };
     }
 
-    const wifi2g = wifiBands.find(b => b.band.includes('2.4') || b.band === 'WLAN1');
-    const wifi5g = wifiBands.find(b => b.band.includes('5') || b.band === 'WLAN5');
+    return results;
+  }
 
-    return {
-      vLoginPPPoE,
-      vWAN1_IP,
-      vWAN2_IP,
-      vIP_Voip,
-      vWifi2G: wifi2g ? `${wifi2g.ssid} | Ch:${wifi2g.channel} | ${wifi2g.status}` : '',
-      vWifi5G: wifi5g ? `${wifi5g.ssid} | Ch:${wifi5g.channel} | ${wifi5g.status}` : '',
-      wifiBands,
-    };
+  async computeAndStoreVirtualParameters(deviceId: string) {
+    try {
+      const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+      if (!device) return;
+
+      const params = (device.parameters as Record<string, string>) || {};
+      const defs = await this.getVirtualParameterDefinitions(device.tenantId);
+      if (defs.size === 0) return;
+
+      const computed = await this.computeVirtualParameters(params, defs);
+      if (Object.keys(computed).length === 0) return;
+
+      const currentParams = { ...params };
+      let changed = false;
+
+      for (const [name, value] of Object.entries(computed)) {
+        const key = `VirtualParameters.${name}`;
+        if (currentParams[key] !== value) {
+          currentParams[key] = value;
+          changed = true;
+        }
+      }
+
+      if (!changed) return;
+
+      await this.prisma.device.update({
+        where: { id: deviceId },
+        data: { parameters: currentParams as any },
+      });
+
+      this.logger.log(`[VP] Computed & stored ${Object.keys(computed).length} virtual params for ${device.serial}`);
+    } catch (err: any) {
+      this.logger.error(`[VP] Error computing virtual params for ${deviceId}: ${err.message}`);
+    }
   }
 
   async getConnectedDevices(id: string) {

@@ -418,7 +418,10 @@ export default function Devices() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {[
                     { label: 'Last Inform', value: fmt(selected.lastInform) },
-                    { label: 'vWAN1_IP', value: virtualParams?.vWAN1_IP || '-' },
+                    ...(virtualParams ? Object.entries(virtualParams).map(([key, vp]: [string, any]) => ({
+                      label: vp.label || key,
+                      value: vp.value || '-',
+                    })) : []),
                     { label: 'Serial', value: selected.serial },
                     { label: 'Product Class', value: (selected.parameters as any)?.['InternetGatewayDevice.DeviceInfo.ProductClass'] || (selected.parameters as any)?.['Device.DeviceInfo.ProductClass'] || '-' },
                     { label: 'OUI', value: selected.oui || (selected.parameters as any)?.['InternetGatewayDevice.DeviceInfo.ManufacturerOUI'] || (selected.parameters as any)?.['Device.DeviceInfo.ManufacturerOUI'] || '-' },
@@ -436,9 +439,10 @@ export default function Devices() {
                 {/* WiFi Section — only shown when data available */}
                 {(() => {
                   const p = selected.parameters as Record<string, string> || {};
-                  const hasWifi = virtualParams?.wifiBands?.length > 0
-                    || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
-                    || p['Device.WiFi.SSID.1.SSID'];
+                  const hasWifi = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
+                    || p['Device.WiFi.SSID.1.SSID']
+                    || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.SSID']
+                    || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.1.SSID'];
                   if (!hasWifi) return null;
                   return (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -449,12 +453,16 @@ export default function Devices() {
                         </h4>
                         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
                           {(() => {
-                            const wb = virtualParams?.wifiBands?.find((b: any) => b.band.includes('2.4') || b.band === 'WLAN1');
-                            const ssid = wb?.ssid || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] || '-';
-                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] || p['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] || '-';
-                            const ch = wb?.channel || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel'] || '-';
-                            const sta = wb?.status || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status'] || '-';
-                            const assoc = wb?.associations || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations'] || '0';
+                            const ssid = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.SSID']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.1.SSID'] || '-';
+                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
+                              || p['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.1.Security.KeyPassphrase'] || '-';
+                            const ch = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel'] || '-';
+                            const sta = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.Status'] || '-';
+                            const assoc = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations'] || '0';
                             return (<>
                               <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
                               <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>
@@ -472,12 +480,15 @@ export default function Devices() {
                         </h4>
                         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2">
                           {(() => {
-                            const wb = virtualParams?.wifiBands?.find((b: any) => b.band.includes('5') || b.band === 'WLAN5');
-                            const ssid = wb?.ssid || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID'] || '-';
-                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase'] || '-';
-                            const ch = wb?.channel || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel'] || '-';
-                            const sta = wb?.status || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status'] || '-';
-                            const assoc = wb?.associations || p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations'] || '0';
+                            const ssid = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.5.SSID']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.5.SSID'] || '-';
+                            const pass = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.5.Security.KeyPassphrase'] || '-';
+                            const ch = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel'] || '-';
+                            const sta = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status']
+                              || p['InternetGatewayDevice.LANDevice.1.WIFI.SSID.5.Status'] || '-';
+                            const assoc = p['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations'] || '0';
                             return (<>
                               <div className="flex justify-between text-xs"><span className="text-slate-500">SSID</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{ssid}</span></div>
                               <div className="flex justify-between text-xs"><span className="text-slate-500">Passphrase</span><span className="font-mono font-semibold text-slate-900 dark:text-white">{pass}</span></div>

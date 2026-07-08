@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { WebsocketGateway } from '../websocket/websocket.gateway';
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { ScriptsService } from '../scripts/scripts.service';
 import { ConfigService } from '../system-config/config.service';
+import { DevicesService } from '../devices/devices.service';
 
 @Injectable()
 export class CwmpService {
@@ -29,6 +30,7 @@ export class CwmpService {
     private ws: WebsocketGateway,
     private scriptsService: ScriptsService,
     private configService: ConfigService,
+    @Inject(forwardRef(() => DevicesService)) private devicesService: DevicesService,
   ) {}
 
   private async resolveTenantId(): Promise<string> {
@@ -347,6 +349,13 @@ export class CwmpService {
         tenantId: device.tenantId,
       },
     });
+
+    // Compute Virtual Parameters from definitions (like GenieACS VirtualParameters.*)
+    try {
+      await this.devicesService.computeAndStoreVirtualParameters(device.id);
+    } catch (err: any) {
+      this.logger.warn(`[VP] Failed to compute virtual params for ${serial}: ${err.message}`);
+    }
 
     // Auto-provisioning: apply model defaults + fix ACS URL on first boot
     const isNewDevice = !device?.createdAt || (Date.now() - new Date(device.createdAt).getTime() < 120000);
