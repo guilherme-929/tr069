@@ -64,9 +64,4 @@ export class DevicesController {
     return this.devicesService.getVirtualParameters(id);
   }
 
-  @Roles(Role.ADMIN, Role.TECHNICIAN)
-  @Get(':id/connected-devices')
-  getConnectedDevices(@Param('id') id: string) {
-    return this.devicesService.getConnectedDevices(id);
-  }
 }
