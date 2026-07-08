@@ -23,6 +23,17 @@ export class ScriptsController {
   }
 
   @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Get('executions')
+  getExecutions(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('deviceId') deviceId?: string,
+    @Query('scriptId') scriptId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.scriptsService.getExecutions(tenantId, deviceId, scriptId, limit ? parseInt(limit) : 50);
+  }
+
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.scriptsService.findOne(id);

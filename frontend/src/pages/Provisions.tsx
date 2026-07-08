@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { ToggleLeft, ToggleRight, Trash2, Code, Plus, Save, X, Check, AlertCircle } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Trash2, Code, Plus, Save, X, Check, AlertCircle, Clock, Eye } from 'lucide-react';
 
 interface ScriptAction {
   type: string;
@@ -8,6 +8,15 @@ interface ScriptAction {
   value?: any;
   tag?: string;
   message?: string;
+}
+
+interface ScriptExecution {
+  id: string;
+  deviceId: string;
+  status: string;
+  error: string | null;
+  createdAt: string;
+  result?: { action: ScriptAction; status: string; error?: string }[];
 }
 
 interface Script {
@@ -19,6 +28,7 @@ interface Script {
   script: string | null;
   actions: ScriptAction[] | null;
   enabled: boolean;
+  executions?: ScriptExecution[];
 }
 
 const CHANNEL_COLORS: Record<string, string> = {
@@ -27,14 +37,20 @@ const CHANNEL_COLORS: Record<string, string> = {
   inform: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
 };
 
+const STATUS_ICONS: Record<string, { icon: any; color: string }> = {
+  COMPLETED: { icon: Check, color: 'text-success' },
+  FAILED: { icon: X, color: 'text-danger' },
+  PENDING: { icon: Clock, color: 'text-warning' },
+};
+
 export default function Provisions() {
   const [scripts, setScripts] = useState<Script[]>([]);
+  const [executions, setExecutions] = useState<ScriptExecution[]>([]);
   const [channel, setChannel] = useState('');
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  // New / Edit form
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
@@ -42,6 +58,8 @@ export default function Provisions() {
   const [formPrecondition, setFormPrecondition] = useState('');
   const [formActions, setFormActions] = useState('');
   const [formEnabled, setFormEnabled] = useState(true);
+
+  const [execModal, setExecModal] = useState<{ script: Script; execution: ScriptExecution } | null>(null);
 
   const loadScripts = async () => {
     try {
@@ -54,6 +72,16 @@ export default function Provisions() {
   };
 
   useEffect(() => { loadScripts(); }, []);
+
+  const loadExecutions = async (scriptId?: string) => {
+    try {
+      const params = scriptId ? `?scriptId=${scriptId}` : '';
+      const { data } = await api.get(`/scripts/executions${params}`);
+      setExecutions(data);
+    } catch {
+      // silent
+    }
+  };
 
   const resetForm = () => {
     setShowForm(false);
@@ -129,10 +157,36 @@ export default function Provisions() {
     }
   };
 
+  const viewExecutions = async (s: Script) => {
+    try {
+      const { data } = await api.get(`/scripts/executions?scriptId=${s.id}&limit=20`);
+      if (data.length > 0) {
+        setExecModal({ script: s, execution: data[0] });
+        setExecutions(data);
+      } else {
+        setMessage('No executions yet for this provision');
+      }
+    } catch {
+      setMessage('Failed to load executions');
+    }
+  };
+
   const channels = ['all', 'bootstrap', 'default', 'inform'];
   const filtered = channel && channel !== 'all'
     ? scripts.filter(s => s.channel === channel)
     : scripts;
+
+  const lastExecStatus = (s: Script) => {
+    if (!s.executions || s.executions.length === 0) return null;
+    const st = s.executions[0];
+    const info = STATUS_ICONS[st.status];
+    if (!info) return null;
+    return (
+      <span className={`inline-flex items-center gap-1 text-xs font-bold ${info.color}`}>
+        <info.icon size={12} /> {st.status}
+      </span>
+    );
+  };
 
   const actionSummary = (actions: ScriptAction[] | null) => {
     if (!actions || actions.length === 0) return <span className="text-slate-400">—</span>;
@@ -265,13 +319,14 @@ export default function Provisions() {
                 <th className="text-left py-3 px-4 text-xs font-bold text-slate-400 uppercase">Channel</th>
                 <th className="text-left py-3 px-4 text-xs font-bold text-slate-400 uppercase">Precondition</th>
                 <th className="text-left py-3 px-4 text-xs font-bold text-slate-400 uppercase">Actions</th>
+                <th className="text-center py-3 px-4 text-xs font-bold text-slate-400 uppercase">Last Exec</th>
                 <th className="text-center py-3 px-4 text-xs font-bold text-slate-400 uppercase">Enabled</th>
                 <th className="text-right py-3 px-4 text-xs font-bold text-slate-400 uppercase">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filtered.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center text-sm text-slate-400">
+                <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-400">
                   <AlertCircle size={24} className="mx-auto mb-2 text-slate-300" />
                   No provisions found
                 </td></tr>
@@ -300,6 +355,16 @@ export default function Provisions() {
                     </div>
                   </td>
                   <td className="py-3 px-4 text-center">
+                    {lastExecStatus(s) ? (
+                      <button onClick={() => viewExecutions(s)}
+                        className="inline-flex items-center gap-1 hover:opacity-80">
+                        {lastExecStatus(s)}
+                      </button>
+                    ) : (
+                      <span className="text-slate-300 text-xs">—</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-center">
                     <button onClick={() => toggleEnabled(s)}
                       className={`inline-flex items-center gap-1 text-xs font-bold transition-colors ${
                         s.enabled ? 'text-success' : 'text-slate-400'
@@ -309,6 +374,11 @@ export default function Provisions() {
                   </td>
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => viewExecutions(s)}
+                        title="View executions"
+                        className="p-1.5 text-slate-400 hover:text-primary rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <Eye size={14} />
+                      </button>
                       <button onClick={() => openEdit(s)}
                         className="p-1.5 text-slate-400 hover:text-primary rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
                         <Code size={14} />
@@ -325,6 +395,73 @@ export default function Provisions() {
           </table>
         </div>
       </div>
+
+      {/* Execution Modal */}
+      {execModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setExecModal(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl w-full max-w-3xl max-h-[80vh] overflow-hidden mx-4"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                  Executions: {execModal.script.name}
+                </h3>
+                <p className="text-xs text-slate-400">Recent execution history</p>
+              </div>
+              <button onClick={() => setExecModal(null)}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-6 max-h-[60vh]">
+              {executions.length === 0 ? (
+                <p className="text-center text-slate-400 py-8">No executions recorded yet</p>
+              ) : (
+                <div className="space-y-4">
+                  {executions.map(ex => {
+                    const st = STATUS_ICONS[ex.status] || STATUS_ICONS.PENDING;
+                    const results = (ex.result || []) as { action: ScriptAction; status: string; error?: string }[];
+                    return (
+                      <div key={ex.id} className="p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <st.icon size={16} className={st.color} />
+                            <span className={`text-sm font-bold ${st.color}`}>{ex.status}</span>
+                          </div>
+                          <span className="text-xs text-slate-400">{new Date(ex.createdAt).toLocaleString()}</span>
+                        </div>
+                        {ex.error && (
+                          <p className="text-xs text-danger mb-2">{ex.error}</p>
+                        )}
+                        {results.length > 0 && (
+                          <div className="space-y-1 mt-2">
+                            {results.map((r, i) => (
+                              <div key={i} className="flex items-center gap-2 text-xs">
+                                <span className={`font-bold ${r.status === 'COMPLETED' ? 'text-success' : 'text-danger'}`}>
+                                  {r.status === 'COMPLETED' ? '✓' : '✗'}
+                                </span>
+                                <span className="font-mono text-slate-600 dark:text-slate-400">
+                                  {r.action.type}
+                                </span>
+                                {r.action.path && (
+                                  <span className="text-slate-400 truncate max-w-[300px]">{r.action.path}</span>
+                                )}
+                                {r.error && (
+                                  <span className="text-danger ml-1">{r.error}</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -105,11 +105,12 @@ export class ProvisioningService {
     });
   }
 
-  async getTasks(tenantId: string, query: { page?: number; limit?: number; status?: string }) {
+  async getTasks(tenantId: string, query: { page?: number; limit?: number; status?: string; type?: string }) {
     const page = parseInt(query.page as any, 10) || 1;
     const limit = parseInt(query.limit as any, 10) || 20;
     const skip = (page - 1) * limit;
-    const where: any = { tenantId, type: 'Provision' };
+    const where: any = { tenantId };
+    if (query.type) where.type = query.type;
     if (query.status) where.status = query.status;
 
     const [data, total] = await Promise.all([

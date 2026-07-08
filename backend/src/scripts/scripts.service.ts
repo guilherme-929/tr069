@@ -9,6 +9,12 @@ export interface ScriptAction {
   message?: string;
 }
 
+export interface ActionResult {
+  action: ScriptAction;
+  status: 'COMPLETED' | 'FAILED' | 'SKIPPED';
+  error?: string;
+}
+
 @Injectable()
 export class ScriptsService {
   private readonly logger = new Logger(ScriptsService.name);
@@ -19,11 +25,27 @@ export class ScriptsService {
     return this.prisma.script.findMany({
       where: { tenantId },
       orderBy: { name: 'asc' },
+      include: {
+        executions: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { id: true, deviceId: true, status: true, error: true, createdAt: true },
+        },
+      },
     });
   }
 
   async findOne(id: string) {
-    return this.prisma.script.findUnique({ where: { id } });
+    return this.prisma.script.findUnique({
+      where: { id },
+      include: {
+        executions: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          include: { device: { select: { serial: true, modelName: true } } },
+        },
+      },
+    });
   }
 
   async findByName(name: string) {
@@ -63,6 +85,21 @@ export class ScriptsService {
     });
   }
 
+  async getExecutions(tenantId: string, deviceId?: string, scriptId?: string, limit = 50) {
+    const where: any = { tenantId };
+    if (deviceId) where.deviceId = deviceId;
+    if (scriptId) where.scriptId = scriptId;
+    return this.prisma.scriptExecution.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        device: { select: { serial: true, modelName: true } },
+        script: { select: { name: true, channel: true } },
+      },
+    });
+  }
+
   evaluatePrecondition(precondition: string | null, device: any): boolean {
     if (!precondition) return true;
     try {
@@ -80,21 +117,18 @@ export class ScriptsService {
   }
 
   private evaluateSingleCondition(expr: string, params: Record<string, string>, tags: string[]): boolean {
-    // Tag condition: Tags.XXX IS NOT NULL OR Tags.xxx IS NOT NULL
     const tagMatch = expr.match(/Tags\.(\S+)\s+IS\s+NOT\s+NULL/i);
     if (tagMatch) {
       const tagName = tagMatch[1].toLowerCase();
       return tags.some(t => t.toLowerCase() === tagName);
     }
 
-    // Tag negated condition: Tags.XXX IS NULL
     const tagNullMatch = expr.match(/Tags\.(\S+)\s+IS\s+NULL/i);
     if (tagNullMatch) {
       const tagName = tagNullMatch[1].toLowerCase();
       return !tags.some(t => t.toLowerCase() === tagName);
     }
 
-    // Parameter condition: DeviceID.ProductClass = "value"
     const paramEqMatch = expr.match(/(\S+)\s*=\s*"([^"]+)"/);
     if (paramEqMatch) {
       const paramPath = paramEqMatch[1];
@@ -103,7 +137,6 @@ export class ScriptsService {
       return actual === expected;
     }
 
-    // Parameter inequality: param <> "value"
     const paramNeqMatch = expr.match(/(\S+)\s*<>\s*"([^"]+)"/);
     if (paramNeqMatch) {
       const paramPath = paramNeqMatch[1];
@@ -112,7 +145,6 @@ export class ScriptsService {
       return actual !== expected;
     }
 
-    // OR condition
     if (expr.includes(' OR ')) {
       const parts = expr.split(' OR ').map(e => e.trim());
       return parts.some(p => this.evaluateSingleCondition(p, params, tags));
@@ -141,11 +173,58 @@ export class ScriptsService {
 
     this.logger.log(`Executing script "${script.name}" for device ${deviceId}`);
 
-    if (script.actions && Array.isArray(script.actions)) {
-      for (const action of script.actions as unknown as ScriptAction[]) {
+    const execution = await this.prisma.scriptExecution.create({
+      data: {
+        scriptId: script.id,
+        scriptName: script.name,
+        deviceId,
+        status: 'PENDING',
+        tenantId,
+      },
+    });
+
+    if (!script.actions || !Array.isArray(script.actions)) {
+      await this.prisma.scriptExecution.update({
+        where: { id: execution.id },
+        data: { status: 'COMPLETED', result: [] },
+      });
+      return;
+    }
+
+    const results: ActionResult[] = [];
+    let hasError = false;
+
+    for (const action of script.actions as unknown as ScriptAction[]) {
+      try {
         await this.executeAction(action, deviceId, tenantId);
+        results.push({ action, status: 'COMPLETED' });
+      } catch (err: any) {
+        hasError = true;
+        const errorMsg = err.message || 'Unknown error';
+        this.logger.error(`Script "${script.name}" action failed: ${errorMsg}`);
+        results.push({ action, status: 'FAILED', error: errorMsg });
       }
     }
+
+    await this.prisma.scriptExecution.update({
+      where: { id: execution.id },
+      data: {
+        status: hasError ? 'FAILED' : 'COMPLETED',
+        result: results as any,
+        error: hasError ? `${results.filter(r => r.status === 'FAILED').length} of ${results.length} actions failed` : null,
+      },
+    });
+
+    await this.prisma.log.create({
+      data: {
+        action: 'SCRIPT_EXECUTION',
+        entity: 'DEVICE',
+        entityId: deviceId,
+        detail: `Script "${script.name}" ${hasError ? 'FAILED' : 'COMPLETED'}: ${results.filter(r => r.status === 'COMPLETED').length}/${results.length} actions ok`,
+        deviceId,
+        tenantId,
+      },
+    });
   }
 
   async executeScriptByName(name: string, deviceId: string, tenantId: string) {
@@ -154,12 +233,7 @@ export class ScriptsService {
       this.logger.warn(`Provision "${name}" not found or disabled`);
       return;
     }
-    this.logger.log(`Executing provision "${name}" for device ${deviceId}`);
-    if (script.actions && Array.isArray(script.actions)) {
-      for (const action of script.actions as unknown as ScriptAction[]) {
-        await this.executeAction(action, deviceId, tenantId);
-      }
-    }
+    await this.executeScript(script.id, deviceId, tenantId);
   }
 
   private async executeAction(action: ScriptAction, deviceId: string, tenantId: string) {
@@ -191,9 +265,6 @@ export class ScriptsService {
 
   private async createGetParamTask(deviceId: string, path: string, tenantId: string) {
     if (!path) return;
-    // Expand TR-069 wildcards (e.g. WLANConfiguration.*.SSID) into explicit
-    // instances 1..8. Many CPEs (e.g. ZTE) reject GetParameterValues with a
-    // '*' segment and return Fault 9005, so we send concrete instance paths.
     const names: string[] = [];
     if (path.includes('*')) {
       for (let i = 1; i <= 8; i++) {

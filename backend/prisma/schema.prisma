@@ -75,6 +75,7 @@ model Tenant {
   logs         Log[]
   alerts       Alert[]
   scripts      Script[]
+  scriptExecutions ScriptExecution[]
   configs      Config[]
 }
 
@@ -135,6 +136,7 @@ model Device {
   events   Event[]
   logs     Log[]
   alerts   Alert[]
+  executions ScriptExecution[]
 
   @@index([tenantId])
   @@index([serial])
@@ -324,12 +326,35 @@ model Script {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant    Tenant            @relation(fields: [tenantId], references: [id])
+  executions ScriptExecution[]
 
   @@index([tenantId])
   @@index([channel])
   @@index([type])
   @@index([enabled])
+}
+
+model ScriptExecution {
+  id         String   @id @default(cuid())
+  scriptId   String
+  scriptName String
+  deviceId   String
+  status     String   @default("PENDING") // PENDING | COMPLETED | FAILED
+  result     Json?    // Detailed result per action [{action, status, error?}]
+  error      String?  // Error message if failed
+  tenantId   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  script Script @relation(fields: [scriptId], references: [id])
+  device Device @relation(fields: [deviceId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([scriptId])
+  @@index([deviceId])
+  @@index([tenantId])
+  @@index([createdAt])
 }
 
 model Config {

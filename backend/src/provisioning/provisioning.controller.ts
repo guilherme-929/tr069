@@ -40,7 +40,13 @@ export class ProvisioningController {
   }
 
   @Get('tasks')
-  getTasks(@CurrentUser('tenantId') tenantId: string, @Query() query: any) {
-    return this.provisioningService.getTasks(tenantId, query);
+  getTasks(
+    @CurrentUser('tenantId') tenantId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+  ) {
+    return this.provisioningService.getTasks(tenantId, { page, limit, status, type });
   }
 }

@@ -3,7 +3,6 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 const provisions = [
-  // Auto-generated from GenieACS provisions
   {
     "name": "bootstrap",
     "type": "provision",
@@ -19,13 +18,62 @@ const provisions = [
     "actions": [
       { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.HardwareVersion" },
       { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.MACAddress" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.*.WANConnectionDevice.*.WANIPConnection.*.ExternalIPAddress" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.SSID" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.KeyPassphrase" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.Hosts.Host.*.HostName" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.Hosts.Host.*.IPAddress" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.Hosts.Host.*.MACAddress" }
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.HostName" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.IPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.MACAddress" }
+    ]
+  },
+  {
+    "name": "default-ZTE-F670L",
+    "type": "provision",
+    "channel": "default",
+    "precondition": "DeviceID.ProductClass = \"F670L\"",
+    "actions": [
+      { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.HardwareVersion" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WIFI.1.SSID" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WIFI.1.KeyPassphrase" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.HostName" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.IPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.MACAddress" }
+    ]
+  },
+  {
+    "name": "default-ZTE-F660",
+    "type": "provision",
+    "channel": "default",
+    "precondition": "DeviceID.ProductClass = \"F660\"",
+    "actions": [
+      { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.HardwareVersion" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WIFI.1.SSID" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WIFI.1.KeyPassphrase" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.HostName" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.IPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.MACAddress" }
+    ]
+  },
+  {
+    "name": "default-Huawei",
+    "type": "provision",
+    "channel": "default",
+    "precondition": "DeviceID.Manufacturer = \"Huawei\"",
+    "actions": [
+      { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.HardwareVersion" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.DeviceInfo.SoftwareVersion" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.HostName" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.IPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.MACAddress" }
     ]
   },
   {
@@ -47,9 +95,9 @@ const provisions = [
     "precondition": null,
     "actions": [
       { "type": "clearTag", "tag": "acs" },
-      { "type": "setParameter", "path": "Device.ManagementServer.URL", "value": "http://acs.alemnet.net.br:7547" },
-      { "type": "setParameter", "path": "InternetGatewayDevice.ManagementServer.URL", "value": "http://acs.alemnet.net.br:7547" },
-      { "type": "setParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3WANIPConnection.1.X_CT-COM_PingResponseEnable", "value": true }
+      { "type": "setParameter", "path": "Device.ManagementServer.URL", "value": "http://acs.alemnet.net.br:7547/cwmp" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.ManagementServer.URL", "value": "http://acs.alemnet.net.br:7547/cwmp" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.WANDevice.1.WANConnectionDevice.3.WANIPConnection.1.X_CT-COM_PingResponseEnable", "value": true }
     ]
   },
   {
@@ -98,11 +146,11 @@ const provisions = [
     "actions": [
       { "type": "clearTag", "tag": "summon" },
       { "type": "clearTag", "tag": "SUMMON" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.SSID" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.WLANConfiguration.*.KeyPassphrase" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.Hosts.Host.*.HostName" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.Hosts.Host.*.IPAddress" },
-      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.*.Hosts.Host.*.MACAddress" }
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.HostName" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.IPAddress" },
+      { "type": "getParameter", "path": "InternetGatewayDevice.LANDevice.1.Hosts.Host.1.MACAddress" }
     ]
   },
   {
@@ -151,10 +199,9 @@ const provisions = [
     "name": "ZTE-F670L",
     "type": "provision",
     "channel": "inform",
-    "precondition": "DeviceID.ProductClass = \"F670L\"",
+    "precondition": null,
     "actions": [
-      { "type": "setParameter", "path": "InternetGatewayDevice.ManagementServer.PeriodicInformEnable", "value": true },
-      { "type": "setParameter", "path": "InternetGatewayDevice.ManagementServer.PeriodicInformInterval", "value": 60 }
+      { "type": "log", "message": "ZTE-F670L: padronizando F670L" }
     ]
   },
   {

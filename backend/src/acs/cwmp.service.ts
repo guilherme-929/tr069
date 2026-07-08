@@ -157,6 +157,20 @@ export class CwmpService {
       return this.buildFaultResponse('Client', 'Missing serial number');
     }
 
+    // Debounce BOOT events: ignore BOOT if last BOOT was < 60s ago
+    if (eventCodeStr.includes('1 BOOT') || eventCodeStr.includes('BOOT')) {
+      const recentBoot = await this.prisma.event.findFirst({
+        where: { deviceId: serial, code: { contains: 'BOOT' } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (recentBoot) {
+        const elapsed = Date.now() - new Date(recentBoot.createdAt).getTime();
+        if (elapsed < 60000) {
+          this.logger.warn(`[BOOT-DEBOUNCE] Ignoring BOOT from ${serial} — last BOOT was ${Math.round(elapsed/1000)}s ago`);
+        }
+      }
+    }
+
     let device = await this.prisma.device.findUnique({ where: { serial } });
 
     const paramMap: Record<string, string> = {};
