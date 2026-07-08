@@ -418,9 +418,9 @@ export default function Devices() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {[
                     { label: 'Last Inform', value: fmt(selected.lastInform) },
-                    ...(virtualParams ? Object.entries(virtualParams).map(([key, vp]: [string, any]) => ({
-                      label: vp.label || key,
-                      value: vp.value || '-',
+                    ...(virtualParams ? Object.entries(virtualParams).map(([key, val]) => ({
+                      label: key,
+                      value: String(val ?? '-'),
                     })) : []),
                     { label: 'Serial', value: selected.serial },
                     { label: 'Product Class', value: (selected.parameters as any)?.['InternetGatewayDevice.DeviceInfo.ProductClass'] || (selected.parameters as any)?.['Device.DeviceInfo.ProductClass'] || '-' },

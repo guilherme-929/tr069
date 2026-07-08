@@ -193,16 +193,10 @@ export class DevicesService {
 
     const computed = await this.computeVirtualParameters(params, defs);
 
-    const results: Record<string, { label: string; value: string; description?: string }> = {};
+    const results: Record<string, any> = {};
     for (const [name, value] of Object.entries(computed)) {
-      const def = defs.get(name);
-      results[name] = {
-        label: def?.label || name,
-        value,
-        description: def?.description,
-      };
+      results[name] = value;
     }
-
     return results;
   }
 
