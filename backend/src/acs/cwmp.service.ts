@@ -898,12 +898,29 @@ export class CwmpService {
 
     const params = (device.parameters as Record<string, string>) || {};
 
-    // Detect which WiFi namespace this CPE actually exposes. ZTE CPEs (e.g.
-    // F670L) report WiFi under InternetGatewayDevice.LANDevice.1.WIFI.* and
-    // DO NOT implement WLANConfiguration.* nor Device.WiFi.* (TR-181). When a
-    // GetParameterValues request mixes an unsupported path the CPE returns a
-    // SOAP Fault for the WHOLE request, so we must not mix namespaces. We
-    // probe the cached parameters to decide which namespace to query.
+    // Some CPEs expose fewer WiFi instances than the hardcoded maximum of 8.
+    // Querying a non-existent instance (e.g. SSID.3..8 on a WiFi:2 device)
+    // makes the CPE reject the whole GetParameterValues with SOAP Fault 9005
+    // "Invalid parameter name". Derive the real instance count from the CPE's
+    // reported DeviceSummary (e.g. "...WiFi:2...") and fall back to 8.
+    let maxWifiInstances = 8;
+    const summary = params['InternetGatewayDevice.DeviceSummary'] || '';
+    const wifiMatch = summary.match(/WiFi:(\d+)/);
+    if (wifiMatch) {
+      const reported = parseInt(wifiMatch[1], 10);
+      if (reported > 0 && reported < maxWifiInstances) maxWifiInstances = reported;
+    }
+
+    // Detect which WiFi namespace this CPE actually exposes. TR-098 defines
+    // InternetGatewayDevice.LANDevice.1.WLANConfiguration.* as the standard
+    // WiFi path; some vendors (e.g. ZTE F670L) instead use the TR-098 variant
+    // InternetGatewayDevice.LANDevice.1.WIFI.*, and others use TR-181
+    // Device.WiFi.*. When a GetParameterValues request mixes an unsupported
+    // path the CPE returns a SOAP Fault for the WHOLE request, so we must not
+    // mix namespaces. We trust the cached parameters when available; when the
+    // WiFi cache is still empty we default to the standard WLANConfiguration.*
+    // namespace (the spec default that this ZTE fleet actually implements)
+    // instead of guessing WIFI.*.
     const hasWLAN = Object.keys(params).some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WLANConfiguration.'),
     );
@@ -912,15 +929,12 @@ export class CwmpService {
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
 
-    // Default to the ZTE WIFI.* namespace (most common for these devices).
-    // Only add WLANConfiguration.* / Device.WiFi.* if the CPE has already
-    // reported params under that namespace, to avoid SOAP Faults.
-    const useWLAN = hasWLAN && !hasZTE;
-    const useTR181 = hasTR181 && !hasZTE;
-    const useZTE = hasZTE || (!hasWLAN && !hasTR181);
+    const useWLAN = hasWLAN || (!hasZTE && !hasTR181);
+    const useTR181 = hasTR181 && !hasZTE && !hasWLAN;
+    const useZTE = hasZTE;
 
     const wifiPaths: string[] = [];
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 1; i <= maxWifiInstances; i++) {
       if (useZTE) {
         // ZTE (TR-098 variant) — uses InternetGatewayDevice.LANDevice.1.WIFI.*
         // SSID/KeyPassphrase live under WIFI.SSID.{i} and WIFI.AccessPoint.{i}.
@@ -964,7 +978,7 @@ export class CwmpService {
     // partial cache (e.g. only `Enable` or `Channel` populated) used to make
     // the UI render blank WLAN cards.
     const knownInstances = new Set<number>();
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 1; i <= maxWifiInstances; i++) {
       const ssid = params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`]
         || params[`Device.WiFi.SSID.${i}.SSID`]
         || params[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`]
