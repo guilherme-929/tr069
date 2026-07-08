@@ -384,6 +384,37 @@ export class CwmpService {
       }
     }
 
+    // Auto-discover parameters on first boot or when discovery is empty
+    // This maps the device's actual data model so GetParameterValues can use
+    // discovered paths instead of hardcoded ones that may not exist on the CPE.
+    const params = (device.parameters as Record<string, any>) || {};
+    const discovered = params.__discovered__ || {};
+    const hasDiscovery = (discovered._leaves?.length || 0) > 0;
+    if (!hasDiscovery && eventCodeStr.includes('BOOT')) {
+      const existingDiscTask = await this.prisma.task.count({
+        where: { deviceId: device.id, type: 'GetParameterNames', status: { in: ['PENDING', 'IN_PROGRESS'] } },
+      });
+      if (existingDiscTask === 0) {
+        this.logger.log(`[DISCOVERY] Auto-starting parameter discovery for ${serial}`);
+        const currentParams = (device.parameters as Record<string, any>) || {};
+        await this.prisma.device.update({
+          where: { id: device.id },
+          data: {
+            parameters: { ...currentParams, __discovered__: { _objects: [], _leaves: [], _values: {}, _writable: {} } } as any,
+          },
+        });
+        await this.prisma.task.create({
+          data: {
+            deviceId: device.id,
+            type: 'GetParameterNames',
+            status: 'PENDING',
+            payload: { parameterPath: '', nextLevel: true },
+            tenantId: device.tenantId,
+          },
+        });
+      }
+    }
+
     // Execute matching GenieACS-style presets (which link to provisions)
     try {
       const channel = eventCodeStr.includes('BOOTSTRAP') ? 'bootstrap'

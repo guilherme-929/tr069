@@ -265,13 +265,32 @@ export class ScriptsService {
 
   private async createGetParamTask(deviceId: string, path: string, tenantId: string) {
     if (!path) return;
-    const names: string[] = [];
-    if (path.includes('*')) {
+
+    // If device has discovered parameter tree, match script path against
+    // discovered leaves to avoid requesting paths that don't exist.
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    const allParams = (device?.parameters as Record<string, any>) || {};
+    const discovered = allParams.__discovered__ || {};
+    const discoveredLeaves: string[] = discovered._leaves || [];
+
+    let names: string[] = [];
+    if (path.includes('*') && discoveredLeaves.length > 0) {
+      // Use discovered leaves that match the path pattern (replace * with .* for regex)
+      const regex = new RegExp('^' + path.replace(/\./g, '\\.').replace(/\*/g, '[^.]*') + '$');
+      names = discoveredLeaves.filter(l => regex.test(l));
+    } else if (path.includes('*')) {
+      // No discovery yet, expand wildcards 1..8 as before
       for (let i = 1; i <= 8; i++) {
         names.push(path.replace(/\*/g, String(i)));
       }
     } else {
+      // No wildcards, use as-is
       names.push(path);
+    }
+
+    if (names.length === 0) {
+      this.logger.warn(`[createGetParamTask] No matching discovered params for path "${path}" on device ${deviceId}`);
+      return;
     }
 
     const existingPending = await this.prisma.task.count({
