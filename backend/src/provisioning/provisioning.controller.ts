@@ -47,6 +47,10 @@ export class ProvisioningController {
     @Query('status') status?: string,
     @Query('type') type?: string,
   ) {
-    return this.provisioningService.getTasks(tenantId, { page, limit, status, type });
+    return this.provisioningService.getTasks(tenantId, {
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      status, type,
+    });
   }
 }
