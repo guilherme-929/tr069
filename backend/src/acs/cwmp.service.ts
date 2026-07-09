@@ -985,6 +985,16 @@ export class CwmpService {
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
         );
+        // Connected clients (Local Hosts) per radio — GenieACS lists these in
+        // the device view. TR-069 GetParameterValues does not expand wildcards,
+        // so we query a fixed window of AssociatedDevice instances.
+        for (let c = 1; c <= 16; c++) {
+          wifiPaths.push(
+            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.AssociatedDeviceMACAddress`,
+            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.AssociatedDeviceIPAddress`,
+            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.X_ZTE-COM_AssociatedDeviceName`,
+          );
+        }
       }
       if (useTR181) {
         // TR-181 paths — iterate all instances so 5GHz / guest SSIDs show up.
@@ -1024,10 +1034,18 @@ export class CwmpService {
           || existingParams[`Device.WiFi.SSID.${idx}.SSID`]
           || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${idx}.SSID`]
           || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${idx}.SSID`];
-        const pwd = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.KeyPassphrase`]
-          || existingParams[`Device.WiFi.AccessPoint.${idx}.Security.KeyPassphrase`]
-          || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${idx}.Security.KeyPassphrase`];
-        if (!ssid || !pwd) {
+        const ch = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.Channel`]
+          || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${idx}.Channel`];
+        const en = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.Enable`]
+          || existingParams[`Device.WiFi.SSID.${idx}.Enable`]
+          || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${idx}.Enable`];
+        const assoc = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.TotalAssociations`];
+        // Some CPEs never return the KeyPassphrase (hidden), so we must not
+        // block completion on it. Require SSID + Channel + Enable (+ clients
+        // count when the radio is active) to consider the instance cached.
+        const missing = !ssid || ch === undefined || en === undefined
+          || (en === '1' && assoc === undefined);
+        if (missing) {
           cacheComplete = false;
           break;
         }

@@ -469,16 +469,18 @@ export default function Devices() {
                      for (const k of keys) if (p[k] !== undefined && p[k] !== '') return p[k];
                      return '-';
                    };
-                   return (
-                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                       {sorted.map((i) => {
-                         const enable = String(
-                           p[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Enable`]
-                           ?? p[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Enable`]
-                           ?? p[`Device.WiFi.SSID.${i}.Enable`]
-                           ?? ''
-                         );
-                         const active = enable === '1' || enable.toLowerCase() === 'true';
+                    return (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {sorted.map((i) => {
+                          const enable = String(
+                            p[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Enable`]
+                            ?? p[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Enable`]
+                            ?? p[`Device.WiFi.SSID.${i}.Enable`]
+                            ?? ''
+                          );
+                          const active = enable === '1' || enable.toLowerCase() === 'true';
+                          // Overview only shows active WiFi interfaces.
+                          if (!active) return null;
                          const ssid = get(i,
                            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`,
                            `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`,
