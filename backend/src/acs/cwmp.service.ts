@@ -939,6 +939,8 @@ export class CwmpService {
 
     // Detect namespace from both cached params AND discovered leaves.
     // This prevents wrong namespace detection when discovery is incomplete.
+    // Priority: WLANConfiguration (TR-098) > WIFI (ZTE-specific) > Wi-Fi (TR-181).
+    // Namespaces are MUTUALLY EXCLUSIVE — never query both in the same session.
     const allKnownKeys = [
       ...Object.keys(params),
       ...(leaves || []),
@@ -951,9 +953,9 @@ export class CwmpService {
     const hasZTE = allKnownKeys.some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
-    const useWLAN = hasWLAN || (!hasZTE && !hasTR181);
-    const useTR181 = hasTR181 && !hasZTE && !hasWLAN;
-    const useZTE = hasZTE;
+    const useWLAN = hasWLAN;
+    const useZTE = !hasWLAN && hasZTE;
+    const useTR181 = !hasWLAN && !hasZTE && hasTR181;
 
     // Build the essential paths per instance (standard CWMP params that all
     // TR-098 CPEs support). These are safe to query and rarely fault.

@@ -68,6 +68,13 @@ export class AcsService implements OnModuleInit {
           return;
         }
 
+        // New Inform from CPE = new CWMP session. Any task left IN_PROGRESS from
+        // a previous session was abandoned (CPE didn't respond). Fail it immediately
+        // so the pipeline is not blocked until the stale timeout.
+        if (serial && (body.includes('<Inform>') || body.includes('<cwmp:Inform>'))) {
+          await this.failInProgressTasks(serial, 'New Inform — previous command abandoned by CPE');
+        }
+
         // Per TR-069, ACS MUST echo back the same cwmp:ID from the CPE's request.
         // The ZTE F670L rejects responses with mismatched IDs.
         const requestCwmpId = this.extractCwmpId(body);
@@ -106,12 +113,14 @@ export class AcsService implements OnModuleInit {
               ? new Date(params.__lastInformResponseAt).getTime()
               : 0;
             const recentThreshold = Date.now() - 5 * 60 * 1000;
-            const isReconnection = lastRespAt > recentThreshold;
+            const isReconnection = lastRespAt > 0 && lastRespAt < recentThreshold;
 
             if (isReconnection) {
-              this.logger.log(`Device ${serial} reconnected (DB flag) — checking pending tasks`);
+              this.logger.log(`Device ${serial} reconnected (DB flag, last response >5 min ago) — checking pending tasks`);
               // Clear the flag so next Inform won't re-trigger
               await this.clearLastInformResponseFlag(dev);
+              // Fail any IN_PROGRESS tasks from the previous session
+              await this.failInProgressTasks(serial, 'Session interrupted by reconnection');
               if (await this.trySendPendingTask(dev, res)) {
                 return;
               }
@@ -172,12 +181,21 @@ export class AcsService implements OnModuleInit {
     if (remaining.length === 0) return false;
 
     const task = remaining[0];
+    const newAttempts = (task.attempts || 0) + 1;
+    if (newAttempts >= (task.maxAttempts || 5)) {
+      await this.prisma.task.update({
+        where: { id: task.id },
+        data: { status: 'FAILED', attempts: newAttempts },
+      });
+      this.logger.warn(`Device ${dev.serial} — task "${task.type}" failed after ${newAttempts} attempts`);
+      return false;
+    }
     await this.prisma.task.update({
       where: { id: task.id },
-      data: { status: 'IN_PROGRESS', attempts: { increment: 1 } },
+      data: { status: 'IN_PROGRESS', attempts: newAttempts },
     });
     const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
-    this.logger.log(`Sending next command "${task.type}" to device ${dev.serial}`);
+    this.logger.log(`Sending next command "${task.type}" to device ${dev.serial} (attempt ${newAttempts}/${task.maxAttempts || 5})`);
     res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
     res.end(commandXml);
     return true;
@@ -224,6 +242,21 @@ export class AcsService implements OnModuleInit {
         data: { status: 'FAILED', error: 'Timed out waiting for CPE response' },
       });
       this.logger.warn(`Task "${t.type}" (${t.id}) stale — failed after 15 min`);
+    }
+  }
+
+  private async failInProgressTasks(serial: string, error: string) {
+    const dev = await this.prisma.device.findUnique({ where: { serial } });
+    if (!dev) return;
+    const inProgress = await this.prisma.task.findMany({
+      where: { deviceId: dev.id, status: 'IN_PROGRESS' },
+    });
+    for (const t of inProgress) {
+      await this.prisma.task.update({
+        where: { id: t.id },
+        data: { status: 'FAILED', error },
+      });
+      this.logger.warn(`Task "${t.type}" (${t.id}) — ${error}`);
     }
   }
 
