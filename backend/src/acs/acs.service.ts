@@ -144,7 +144,7 @@ export class AcsService implements OnModuleInit {
 
     const task = pending[0];
     const newAttempts = (task.attempts || 0) + 1;
-    if (newAttempts >= (task.maxAttempts || 3)) {
+    if (newAttempts >= (task.maxAttempts || 5)) {
       await this.prisma.task.update({
         where: { id: task.id },
         data: { status: 'FAILED', attempts: newAttempts },
@@ -158,7 +158,7 @@ export class AcsService implements OnModuleInit {
       data: { status: 'IN_PROGRESS', attempts: newAttempts },
     });
     const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
-    this.logger.log(`Device ${dev.serial} — sending command "${task.type}" (attempt ${newAttempts}/${task.maxAttempts || 3})`);
+    this.logger.log(`Device ${dev.serial} — sending command "${task.type}" (attempt ${newAttempts}/${task.maxAttempts || 5})`);
     res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
     res.end(commandXml);
     return true;
@@ -210,12 +210,12 @@ export class AcsService implements OnModuleInit {
   private async failStaleTasks(serial: string) {
     const dev = await this.prisma.device.findUnique({ where: { serial } });
     if (!dev) return;
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const timeoutMinAgo = new Date(Date.now() - 15 * 60 * 1000);
     const stale = await this.prisma.task.findMany({
       where: {
         deviceId: dev.id,
         status: 'IN_PROGRESS',
-        updatedAt: { lt: fiveMinAgo },
+        updatedAt: { lt: timeoutMinAgo },
       },
     });
     for (const t of stale) {
@@ -223,7 +223,7 @@ export class AcsService implements OnModuleInit {
         where: { id: t.id },
         data: { status: 'FAILED', error: 'Timed out waiting for CPE response' },
       });
-      this.logger.warn(`Task "${t.type}" (${t.id}) stale — failed after 5 min`);
+      this.logger.warn(`Task "${t.type}" (${t.id}) stale — failed after 15 min`);
     }
   }
 

@@ -908,21 +908,23 @@ export class CwmpService {
 
     const params = (device.parameters as Record<string, string>) || {};
 
-    // Determine which WiFi instances this CPE actually exposes. GenieACS does
-    // this via parameter discovery (GetParameterNames) and only queries the
-    // instances the CPE reports. We replicate that: if the device has already
-    // been discovered, derive the instance set from the discovered leaves
-    // (e.g. WLANConfiguration.5.SSID -> instance 5). When discovery is still
-    // empty we fall back to scanning instances 1..8 (the TR-098 maximum), the
-    // same broad scan GenieACS performs — the CPE simply omits instances it
-    // does not implement, and a single missing instance does NOT fault the
-    // whole request as long as we stay within one namespace.
+    // Determine which WiFi instances this CPE actually exposes.
+    // Check discovered leaves AND cached params for a complete picture.
     const discovered = (params.__discovered__ as any) || {};
     const leaves: string[] = discovered._leaves || [];
     const discoveredInstances = new Set<number>();
     const instanceRe = /WLANConfiguration\.(\d+)\.|\.WIFI\.SSID\.(\d+)\.|\.WiFi\.SSID\.(\d+)\./;
     for (const leaf of leaves) {
       const m = leaf.match(instanceRe);
+      if (m) {
+        const inst = parseInt(m[1] || m[2] || m[3], 10);
+        if (inst > 0) discoveredInstances.add(inst);
+      }
+    }
+    // Also check cached params for instances that aren't in discovery yet
+    const cachedInstanceRe = /WLANConfiguration\.(\d+)\.|\.WIFI\.SSID\.(\d+)\.|\.WiFi\.SSID\.(\d+)\./;
+    for (const key of Object.keys(params)) {
+      const m = key.match(cachedInstanceRe);
       if (m) {
         const inst = parseInt(m[1] || m[2] || m[3], 10);
         if (inst > 0) discoveredInstances.add(inst);
@@ -935,61 +937,66 @@ export class CwmpService {
       instances = Array.from({ length: 8 }, (_, i) => i + 1);
     }
 
-    // Detect which WiFi namespace this CPE actually exposes. TR-098 defines
-    // InternetGatewayDevice.LANDevice.1.WLANConfiguration.* as the standard
-    // WiFi path; some vendors (e.g. ZTE F670L) instead use the TR-098 variant
-    // InternetGatewayDevice.LANDevice.1.WIFI.*, and others use TR-181
-    // Device.WiFi.*. When a GetParameterValues request mixes an unsupported
-    // path the CPE returns a SOAP Fault for the WHOLE request, so we must not
-    // mix namespaces. We trust the cached parameters when available; when the
-    // WiFi cache is still empty we default to the standard WLANConfiguration.*
-    // namespace (the spec default that this ZTE fleet actually implements)
-    // instead of guessing WIFI.*.
-    const hasWLAN = Object.keys(params).some((k) =>
+    // Detect namespace from both cached params AND discovered leaves.
+    // This prevents wrong namespace detection when discovery is incomplete.
+    const allKnownKeys = [
+      ...Object.keys(params),
+      ...(leaves || []),
+      ...Object.keys(discovered._values || {}),
+    ];
+    const hasWLAN = allKnownKeys.some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WLANConfiguration.'),
     );
-    const hasTR181 = Object.keys(params).some((k) => k.startsWith('Device.WiFi.'));
-    const hasZTE = Object.keys(params).some((k) =>
+    const hasTR181 = allKnownKeys.some((k) => k.startsWith('Device.WiFi.'));
+    const hasZTE = allKnownKeys.some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
-
     const useWLAN = hasWLAN || (!hasZTE && !hasTR181);
     const useTR181 = hasTR181 && !hasZTE && !hasWLAN;
     const useZTE = hasZTE;
 
-    const wifiPaths: string[] = [];
+    // Build the essential paths per instance (standard CWMP params that all
+    // TR-098 CPEs support). These are safe to query and rarely fault.
+    const essentialPathsByInstance: Record<number, string[]> = {};
+    // Vendor-specific paths (X_ZTE-COM_*) that may fault on some firmware.
+    const vendorPathsByInstance: Record<number, string[]> = {};
+    // Associated device entries (MAC, IP, name).
+    const hostPathsByInstance: Record<number, string[]> = {};
+
     for (const i of instances) {
+      essentialPathsByInstance[i] = [];
+      vendorPathsByInstance[i] = [];
+      hostPathsByInstance[i] = [];
+
       if (useZTE) {
-        // ZTE (TR-098 variant) — uses InternetGatewayDevice.LANDevice.1.WIFI.*
-        // SSID/KeyPassphrase live under WIFI.SSID.{i} and WIFI.AccessPoint.{i}.
-        wifiPaths.push(
+        essentialPathsByInstance[i].push(
           `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`,
           `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Enable`,
           `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Status`,
-          `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.X_ZTE-COM_OperatingFrequencyBand`,
           `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`,
           `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Enable`,
           `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Security.KeyPassphrase`,
         );
+        vendorPathsByInstance[i].push(
+          `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.X_ZTE-COM_OperatingFrequencyBand`,
+        );
       }
       if (useWLAN) {
-        wifiPaths.push(
+        essentialPathsByInstance[i].push(
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.KeyPassphrase`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Enable`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Channel`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Status`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Standard`,
-          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.BandWidth`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`,
+        );
+        vendorPathsByInstance[i].push(
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
         );
-        // Connected clients (Local Hosts) per radio — GenieACS lists these in
-        // the device view. TR-069 GetParameterValues does not expand wildcards,
-        // so we query a fixed window of AssociatedDevice instances.
         for (let c = 1; c <= 16; c++) {
-          wifiPaths.push(
+          hostPathsByInstance[i].push(
             `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.AssociatedDeviceMACAddress`,
             `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.AssociatedDeviceIPAddress`,
             `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.X_ZTE-COM_AssociatedDeviceName`,
@@ -997,8 +1004,7 @@ export class CwmpService {
         }
       }
       if (useTR181) {
-        // TR-181 paths — iterate all instances so 5GHz / guest SSIDs show up.
-        wifiPaths.push(
+        essentialPathsByInstance[i].push(
           `Device.WiFi.SSID.${i}.SSID`,
           `Device.WiFi.SSID.${i}.Enable`,
           `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
@@ -1006,11 +1012,8 @@ export class CwmpService {
       }
     }
 
-    // We consider the cache "complete" only when we already have the most
-    // important fields for every instance we know about. If any instance is
-    // missing its SSID/KeyPassphrase we must go back to the CPE — returning a
-    // partial cache (e.g. only `Enable` or `Channel` populated) used to make
-    // the UI render blank WLAN cards.
+    // Check cache completeness using only essential paths (SSID, KeyPassphrase,
+    // Enable, Channel, Status). Vendor-specific paths are not required.
     const knownInstances = new Set<number>();
     for (const i of instances) {
       const ssid = params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`]
@@ -1020,14 +1023,19 @@ export class CwmpService {
       if (ssid !== undefined) knownInstances.add(i);
     }
 
-    let cacheComplete = knownInstances.size > 0;
     const existingParams: Record<string, string> = {};
-    for (const path of wifiPaths) {
+    const allPaths = [
+      ...Object.values(essentialPathsByInstance).flat(),
+      ...Object.values(vendorPathsByInstance).flat(),
+      ...Object.values(hostPathsByInstance).flat(),
+    ];
+    for (const path of allPaths) {
       const v = params[path];
       if (v === undefined || v === '') continue;
       existingParams[path] = v;
     }
 
+    let cacheComplete = knownInstances.size > 0;
     if (cacheComplete) {
       for (const idx of knownInstances) {
         const ssid = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.SSID`]
@@ -1040,9 +1048,6 @@ export class CwmpService {
           || existingParams[`Device.WiFi.SSID.${idx}.Enable`]
           || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${idx}.Enable`];
         const assoc = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.TotalAssociations`];
-        // Some CPEs never return the KeyPassphrase (hidden), so we must not
-        // block completion on it. Require SSID + Channel + Enable (+ clients
-        // count when the radio is active) to consider the instance cached.
         const missing = !ssid || ch === undefined || en === undefined
           || (en === '1' && assoc === undefined);
         if (missing) {
@@ -1056,27 +1061,84 @@ export class CwmpService {
       return { params: existingParams, source: 'cache' };
     }
 
-    const task = await this.prisma.task.create({
-      data: {
-        deviceId,
-        type: 'GetParameterValues',
-        status: 'PENDING',
-        payload: { names: wifiPaths },
-        tenantId: device.tenantId,
-      },
-    });
+    // Queue tasks per-instance to avoid one faulty instance killing the whole
+    // request. Essential params first, then vendor-specific, then hosts.
+    const createdTasks: any[] = [];
+    let taskCount = 0;
+
+    for (const instance of instances) {
+      const essential = essentialPathsByInstance[instance] || [];
+      const vendor = vendorPathsByInstance[instance] || [];
+      const hosts = hostPathsByInstance[instance] || [];
+
+      // Only skip instance if ALL essential params are already cached
+      const hasAllEssential = essential.every((p) => params[p] !== undefined && params[p] !== '');
+
+      if (essential.length > 0 && !hasAllEssential && taskCount < 10) {
+        const task = await this.prisma.task.create({
+          data: {
+            deviceId,
+            type: 'GetParameterValues',
+            status: 'PENDING',
+            payload: { names: essential },
+            tenantId: device.tenantId,
+          },
+        });
+        createdTasks.push(task);
+        taskCount++;
+      }
+
+      // Vendor-specific paths in separate tasks (these are the most likely
+      // to cause SOAP Faults on CPEs with limited firmware support).
+      if (vendor.length > 0 && taskCount < 15) {
+        const vendorParamsAlreadyCached = vendor.every((p) => params[p] !== undefined && params[p] !== '');
+        if (!vendorParamsAlreadyCached) {
+          const task = await this.prisma.task.create({
+            data: {
+              deviceId,
+              type: 'GetParameterValues',
+              status: 'PENDING',
+              payload: { names: vendor },
+              tenantId: device.tenantId,
+            },
+          });
+          createdTasks.push(task);
+          taskCount++;
+        }
+      }
+
+      // Associated hosts in separate tasks
+      if (hosts.length > 0 && taskCount < 20) {
+        const hostTask = await this.prisma.task.create({
+          data: {
+            deviceId,
+            type: 'GetParameterValues',
+            status: 'PENDING',
+            payload: { names: hosts },
+            tenantId: device.tenantId,
+          },
+        });
+        createdTasks.push(hostTask);
+        taskCount++;
+      }
+    }
 
     await this.prisma.log.create({
       data: {
         action: 'WIFI_READ',
         entity: 'DEVICE',
         entityId: deviceId,
-        detail: `Reading WiFi config from ${device.serial}`,
+        detail: `Reading WiFi config from ${device.serial} (${createdTasks.length} tasks queued, ${instances.length} instances)`,
         tenantId: device.tenantId,
       },
     });
 
-    return { task, message: 'Fetching WiFi parameters from CPE...', source: 'pending' };
+    return {
+      tasks: createdTasks,
+      instances: instances.length,
+      message: `Fetching WiFi parameters from CPE... (${createdTasks.length} tasks queued)`,
+      source: 'pending',
+    };
   }
 
   async handleGetConnectedDevices(deviceId: string): Promise<any> {
