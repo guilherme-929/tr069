@@ -844,12 +844,18 @@ export class CwmpService {
     // that this ZTE fleet implements). Only use WIFI.* / Device.WiFi.* when the
     // cache already confirms the CPE exposes those namespaces, otherwise the
     // CPE rejects SetParameterValues with SOAP Fault 9005.
-    const useZTE = hasZTE;
-    const useTR181 = hasTR181 && !hasZTE && !hasWLAN;
-    const useWLAN = hasWLAN || (!hasZTE && !hasTR181);
+    // Determine namespace per-instance, not just per-device.
+    // ZTE F670L exposes WLANConfiguration.5 for 5GHz but may not expose WIFI.SSID.5.
+    const checkInstance = (prefix: string) =>
+      Object.keys(currentParams).some((k) =>
+        k.startsWith(prefix.replace('{i}', String(instance))),
+      );
+    const instHasWLAN = checkInstance('InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.');
+    const instHasZTE = checkInstance('InternetGatewayDevice.LANDevice.1.WIFI.SSID.{i}.');
+    const instHasTR181 = checkInstance('Device.WiFi.SSID.{i}.');
 
     let wifiParams: { name: string; value: string }[];
-    if (useZTE) {
+    if (instHasZTE) {
       wifiParams = [
         { name: `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${instance}.SSID`, value: params.ssid },
         { name: `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${instance}.Enable`, value: '1' },
@@ -857,16 +863,43 @@ export class CwmpService {
         { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.SSID`, value: params.ssid },
         { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.Enable`, value: '1' },
       ];
-    } else if (useTR181) {
+    } else if (instHasTR181) {
       wifiParams = [
         { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
+        { name: `Device.WiFi.SSID.${instance}.Enable`, value: '1' },
         { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
+        { name: `Device.WiFi.AccessPoint.${instance}.SSID`, value: params.ssid },
+        { name: `Device.WiFi.AccessPoint.${instance}.Enable`, value: '1' },
       ];
-    } else {
+    } else if (instHasWLAN) {
       wifiParams = [
         { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.SSID`, value: params.ssid },
         { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.KeyPassphrase`, value: params.password },
+        { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.Enable`, value: '1' },
       ];
+    } else {
+      // Fallback to per-device detection
+      const useZTE = hasZTE;
+      const useTR181 = hasTR181 && !hasZTE && !hasWLAN;
+      if (useZTE) {
+        wifiParams = [
+          { name: `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${instance}.SSID`, value: params.ssid },
+          { name: `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${instance}.Enable`, value: '1' },
+          { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
+          { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.SSID`, value: params.ssid },
+          { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.Enable`, value: '1' },
+        ];
+      } else if (useTR181) {
+        wifiParams = [
+          { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
+          { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
+        ];
+      } else {
+        wifiParams = [
+          { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.SSID`, value: params.ssid },
+          { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.KeyPassphrase`, value: params.password },
+        ];
+      }
     }
 
     const task = await this.prisma.task.create({
@@ -876,6 +909,7 @@ export class CwmpService {
         status: 'PENDING',
         payload: { params: wifiParams },
         tenantId: device.tenantId,
+        createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000), // priority: jump queue
       },
     });
 

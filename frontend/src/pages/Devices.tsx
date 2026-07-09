@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { Search, Wifi, WifiOff, RefreshCw, Power, Download, Settings, Terminal, ExternalLink, Eye, EyeOff, Save, Trash2, Radio, RadioTower, Monitor, Signal, SignalHigh, ChevronRight, ChevronDown, Database } from 'lucide-react';
 
-const tabs = ['Overview', 'TR-069 Params', 'Network', 'WiFi', 'Clients', 'Discovery', 'Logs'] as const;
+const tabs = ['Visão Geral', 'Parâmetros', 'Rede', 'WiFi', 'Clientes', 'Descoberta', 'Logs'] as const;
 type Tab = typeof tabs[number];
 
 export default function Devices() {
@@ -13,7 +13,7 @@ export default function Devices() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('Overview');
+  const [activeTab, setActiveTab] = useState<Tab>('Visão Geral');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [discoveryStatus, setDiscoveryStatus] = useState<any>(null);
@@ -24,6 +24,8 @@ export default function Devices() {
   const [connectedDevicesLoading, setConnectedDevicesLoading] = useState(false);
   const [paramSearch, setParamSearch] = useState('');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [wifiSaving, setWifiSaving] = useState<string | null>(null); // instance index being saved
+  const [wifiSaveMsg, setWifiSaveMsg] = useState<string | null>(null);
 
   const toggleSection = (path: string) => {
     setExpandedSections(prev => {
@@ -69,7 +71,7 @@ export default function Devices() {
   }, [activeTab, selected?.id, selected?.parameters]);
 
   useEffect(() => {
-    if (activeTab === 'Overview' && selected) {
+    if (activeTab === 'Visão Geral' && selected) {
       setVirtualParamsLoading(true);
       setVirtualParams(null);
       api.get(`/devices/${selected.id}/virtual-params`)
@@ -80,7 +82,7 @@ export default function Devices() {
   }, [activeTab, selected?.id]);
 
   useEffect(() => {
-    if ((activeTab === 'Overview' || activeTab === 'Clients') && selected) {
+    if ((activeTab === 'Visão Geral' || activeTab === 'Clientes') && selected) {
       setConnectedDevicesLoading(true);
       api.get(`/devices/${selected.id}/connected-devices`)
         .then(({ data }) => setConnectedDevices(Array.isArray(data) ? data : []))
@@ -93,7 +95,7 @@ export default function Devices() {
     try {
       const { data } = await api.get(`/devices/${id}`);
       setSelected(data);
-      setActiveTab('Overview');
+      setActiveTab('Visão Geral');
     } catch {}
   };
 
@@ -290,21 +292,21 @@ export default function Devices() {
                   disabled={actionLoading === 'reboot'}
                   className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white hover:opacity-90 transition-colors disabled:opacity-40"
                 >
-                  <Power size={13} /> {actionLoading === 'reboot' ? '...' : 'Reboot'}
+                  <Power size={13} /> {actionLoading === 'reboot' ? '...' : 'Reiniciar'}
                 </button>
                 <button
                   onClick={() => doProvision(selected.id)}
                   disabled={actionLoading === 'provision'}
                   className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
                 >
-                  <RefreshCw size={13} /> {actionLoading === 'provision' ? '...' : 'Provision'}
+                  <Settings size={13} /> {actionLoading === 'provision' ? '...' : 'Provisionar'}
                 </button>
                 <button
                   onClick={() => doAction('update', selected.id)}
                   disabled={actionLoading === 'update'}
                   className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
                 >
-                  <Download size={13} /> {actionLoading === 'update' ? '...' : 'Update'}
+                  <Download size={13} /> {actionLoading === 'update' ? '...' : 'Atualizar'}
                 </button>
                 <button
                   onClick={async () => {
@@ -325,7 +327,7 @@ export default function Devices() {
                   disabled={actionLoading === 'reset'}
                   className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-danger/20 text-danger hover:bg-danger/5 transition-colors disabled:opacity-40"
                 >
-                  <Settings size={13} /> {actionLoading === 'reset' ? '...' : 'Reset'}
+                  <RefreshCw size={13} /> {actionLoading === 'reset' ? '...' : 'Reset'}
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -366,16 +368,17 @@ export default function Devices() {
                 <button
                   onClick={async () => {
                     try {
+                      setActionLoading('fetch-all');
                       const { data } = await api.post(`/devices/${selected.id}/fetch-all`, { names: ['Device.', 'InternetGatewayDevice.'], connectionRequest: true });
-                      alert(data.message + ' Connection request sent to wake up CPE.');
+                      alert(data.message);
                     } catch (err: any) {
                       alert(err.response?.data?.message || 'Failed to fetch parameters');
-                    }
+                    } finally { setActionLoading(null); }
                   }}
                   disabled={actionLoading === 'fetch-all'}
                   className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-violet-500/30 text-violet-600 hover:bg-violet-50 transition-colors disabled:opacity-40"
                 >
-                  <Database size={13} /> {actionLoading === 'fetch-all' ? '...' : 'Fetch All'}
+                  <Database size={13} /> {actionLoading === 'fetch-all' ? '...' : 'Buscar Tudo'}
                 </button>
                 <button
                   onClick={() => deleteDevice(selected.id)}
@@ -403,7 +406,7 @@ export default function Devices() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            {activeTab === 'Overview' && (
+            {activeTab === 'Visão Geral' && (
               <>
                 {/* Tags */}
                 {selected.tags?.length > 0 && (
@@ -550,11 +553,11 @@ export default function Devices() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                          <th className="text-left px-3 py-2 font-bold text-slate-500 text-[10px] uppercase">Hostname</th>
+                          <th className="text-left px-3 py-2 font-bold text-slate-500 text-[10px] uppercase">Nome</th>
                           <th className="text-left px-3 py-2 font-bold text-slate-500 text-[10px] uppercase">IP</th>
                           <th className="text-left px-3 py-2 font-bold text-slate-500 text-[10px] uppercase">MAC</th>
                           <th className="text-left px-3 py-2 font-bold text-slate-500 text-[10px] uppercase">Interface</th>
-                          <th className="text-left px-3 py-2 font-bold text-slate-500 text-[10px] uppercase">Active</th>
+                          <th className="text-left px-3 py-2 font-bold text-slate-500 text-[10px] uppercase">Ativo</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -566,7 +569,7 @@ export default function Devices() {
                             <td className="px-3 py-2">{String(cd.interface || (cd.isWireless !== undefined ? (cd.isWireless ? 'WiFi' : 'LAN') : '-'))}</td>
                             <td className="px-3 py-2">
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${cd.active !== false ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-400'}`}>
-                                {cd.active !== false ? 'Active' : 'Inactive'}
+                                {cd.active !== false ? 'Ativo' : 'Inativo'}
                               </span>
                             </td>
                           </tr>
@@ -647,7 +650,7 @@ export default function Devices() {
               </>
             )}
 
-            {activeTab === 'TR-069 Params' && (
+            {activeTab === 'Parâmetros' && (
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">All Parameters</h4>
@@ -744,110 +747,215 @@ export default function Devices() {
               </section>
             )}
 
-            {activeTab === 'Network' && (
+            {activeTab === 'Rede' && (
               <section>
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Network Interfaces</h4>
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Configuração de Rede</h4>
                 <div className="space-y-3">
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                    <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">Connection Info</div>
-                    <div className="space-y-1 text-xs text-slate-600 dark:text-slate-400">
-                      <p><span className="text-slate-400">IPv4:</span> {selected.ipAddress || '-'}</p>
-                      <p><span className="text-slate-400">WAN:</span> {selected.wanIp || '-'}</p>
-                      <p><span className="text-slate-400">MAC:</span> {selected.mac || '-'}</p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const p = selected.parameters as Record<string, string> || {};
+                    const g = (path: string) => {
+                      const v = p[path];
+                      if (!v) return '-';
+                      if (typeof v === 'object') return '';
+                      return String(v);
+                    };
 
-                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-3">
-                    <div className="text-sm font-bold text-slate-900 dark:text-white">Connection Request</div>
+                    const wanLink = g('InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.PhysicalLinkStatus');
+                    const wanType = g('InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.WANAccessType');
+                    const wanExtIp = g('InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress');
+                    const wanEnabled = g('InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.EnabledForInternet');
 
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">ACS Public URL (override)</label>
-                      <input
-                        type="text"
-                        defaultValue={selected.acsPublicUrlOverride || ''}
-                        placeholder="http://acs.mydomain.com:7547"
-                        onBlur={async (e) => {
-                          const val = e.target.value.trim() || undefined;
-                          try {
-                            const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { acsPublicUrlOverride: val });
-                            setSelected((prev: any) => ({ ...prev, acsPublicUrlOverride: data.acsPublicUrlOverride }));
-                          } catch {}
-                        }}
-                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                      />
-                    </div>
+                    const rxPower = g('InternetGatewayDevice.WANDevice.2.X_ZTE-COM_WANPONInterfaceConfig.RXPower');
+                    const txPower = g('InternetGatewayDevice.WANDevice.2.X_ZTE-COM_WANPONInterfaceConfig.TXPower');
+                    const temp = g('InternetGatewayDevice.WANDevice.2.X_ZTE-COM_WANPONInterfaceConfig.TransceiverTemperature');
+                    const volt = g('InternetGatewayDevice.WANDevice.2.X_ZTE-COM_WANPONInterfaceConfig.SupplyVoltage');
+                    const bias = g('InternetGatewayDevice.WANDevice.2.X_ZTE-COM_WANPONInterfaceConfig.BiasCurrent');
 
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Device ConnectionRequest URL</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          defaultValue={selected.connectionRequestUrl || ''}
-                          placeholder="http://192.168.1.1:7547/"
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim() || undefined;
-                            try {
-                              const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestUrl: val });
-                              setSelected((prev: any) => ({ ...prev, connectionRequestUrl: data.connectionRequestUrl }));
-                            } catch {}
-                          }}
-                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                        />
-                      </div>
-                      <p className="text-[10px] text-slate-400 mt-1">Reported by CPE or configured manually</p>
-                    </div>
+                    const lanGw = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.IPRouters');
+                    const lanSubnet = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.SubnetMask');
+                    const lanDhcp = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPServerEnable');
+                    const lanDns = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DNSServers');
+                    const lanMac = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MACAddress');
+                    const dhcpMin = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MinAddress');
+                    const dhcpMax = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.MaxAddress');
+                    const dhcpLease = g('InternetGatewayDevice.LANDevice.1.LANHostConfigManagement.DHCPLeaseTime');
 
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Connection Request Username</label>
-                      <input
-                        type="text"
-                        defaultValue={selected.connectionRequestUsername || ''}
-                        placeholder={selected.serial || 'serial'}
-                        onBlur={async (e) => {
-                          const val = e.target.value.trim() || undefined;
-                          try {
-                            const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestUsername: val });
-                            setSelected((prev: any) => ({ ...prev, connectionRequestUsername: data.connectionRequestUsername }));
-                          } catch {}
-                        }}
-                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                      />
-                      <p className="text-[10px] text-slate-400 mt-1">Default: device serial</p>
-                    </div>
+                    const acsUrl = g('InternetGatewayDevice.ManagementServer.URL');
+                    const crUrl = g('InternetGatewayDevice.ManagementServer.ConnectionRequestURL');
+                    const informInt = g('InternetGatewayDevice.ManagementServer.PeriodicInformInterval');
+                    const informEn = g('InternetGatewayDevice.ManagementServer.PeriodicInformEnable');
+                    const acsUser = g('InternetGatewayDevice.ManagementServer.Username');
 
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Connection Request Password</label>
-                      <input
-                        type="password"
-                        defaultValue={selected.connectionRequestPassword || ''}
-                        placeholder={selected.serial || 'serial'}
-                        onBlur={async (e) => {
-                          const val = e.target.value.trim() || undefined;
-                          try {
-                            const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestPassword: val });
-                            setSelected((prev: any) => ({ ...prev, connectionRequestPassword: data.connectionRequestPassword }));
-                          } catch {}
-                        }}
-                        className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                      />
-                      <p className="text-[10px] text-slate-400 mt-1">Default: device serial</p>
-                    </div>
+                    const txBytes = g('InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.TotalBytesSent');
+                    const rxBytes = g('InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.TotalBytesReceived');
+                    const txPkts = g('InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.TotalPacketsSent');
+                    const rxPkts = g('InternetGatewayDevice.WANDevice.1.WANCommonInterfaceConfig.TotalPacketsReceived');
 
-                    <button
-                      onClick={async () => {
-                        try {
-                          const { data } = await api.post(`/devices/${selected.id}/connection-request`);
-                          alert(data.message);
-                        } catch (err: any) {
-                          alert(err.response?.data?.message || 'Connection request failed');
-                        }
-                      }}
-                      disabled={!selected.connectionRequestUrl}
-                      className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-opacity disabled:opacity-40"
-                    >
-                      <ExternalLink size={14} /> Send Connection Request
-                    </button>
-                  </div>
+                    const fmtBytes = (b: string) => {
+                      const n = parseInt(b);
+                      if (!n) return b;
+                      if (n > 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+                      if (n > 1048576) return (n / 1048576).toFixed(1) + ' MB';
+                      if (n > 1024) return (n / 1024).toFixed(1) + ' KB';
+                      return n + ' B';
+                    };
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                            <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">WAN</div>
+                            <div className="space-y-1 text-xs">
+                              <p><span className="text-slate-400">Tipo:</span> <strong className="text-slate-700 dark:text-slate-300">{wanType}</strong></p>
+                              <p><span className="text-slate-400">Link:</span> <span className={`font-bold ${wanLink === 'Up' ? 'text-success' : 'text-danger'}`}>{wanLink}</span></p>
+                              <p><span className="text-slate-400">IP Externo:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{wanExtIp}</strong></p>
+                              <p><span className="text-slate-400">Internet:</span> {wanEnabled === '1' ? '✓' : '✗'}</p>
+                            </div>
+                          </div>
+                          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                            <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">GPON Óptico</div>
+                            <div className="space-y-1 text-xs">
+                              <p><span className="text-slate-400">RX:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{rxPower}</strong> <span className="text-slate-400">dBm</span></p>
+                              <p><span className="text-slate-400">TX:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{txPower}</strong> <span className="text-slate-400">dBm</span></p>
+                              <p><span className="text-slate-400">Temp:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{temp}</strong> <span className="text-slate-400">°C</span></p>
+                              <p><span className="text-slate-400">Tensão:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{volt}</strong> <span className="text-slate-400">mV</span></p>
+                              <p><span className="text-slate-400">Corrente:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{bias}</strong> <span className="text-slate-400">mA</span></p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                            <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">LAN</div>
+                            <div className="space-y-1 text-xs">
+                              <p><span className="text-slate-400">Gateway:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{lanGw}</strong></p>
+                              <p><span className="text-slate-400">Subnet:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{lanSubnet}</strong></p>
+                              <p><span className="text-slate-400">MAC:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{lanMac}</strong></p>
+                              <p><span className="text-slate-400">DNS:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{lanDns}</strong></p>
+                              <p><span className="text-slate-400">DHCP:</span> {lanDhcp === '1' ? <span className="text-success font-bold">Ativo</span> : <span className="text-slate-400">Inativo</span>} ({dhcpMin} - {dhcpMax}, {dhcpLease}s)</p>
+                            </div>
+                          </div>
+                          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                            <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">TR-069</div>
+                            <div className="space-y-1 text-xs">
+                              <p><span className="text-slate-400">ACS URL:</span> <strong className="font-mono text-slate-700 dark:text-slate-300 text-[10px] break-all">{acsUrl}</strong></p>
+                              <p><span className="text-slate-400">CR URL:</span> <strong className="font-mono text-slate-700 dark:text-slate-300 text-[10px] break-all">{crUrl}</strong></p>
+                              <p><span className="text-slate-400">Inform:</span> <strong className="text-slate-700 dark:text-slate-300">{informInt}s</strong> (ativado: {informEn === 'true' || informEn === '1' ? '✓' : '✗'})</p>
+                              <p><span className="text-slate-400">Usuário:</span> <strong className="font-mono text-slate-700 dark:text-slate-300">{acsUser}</strong></p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                          <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">Tráfego WAN</div>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <p className="text-slate-400">Enviado</p>
+                              <p className="font-mono font-bold text-slate-700 dark:text-slate-300">{fmtBytes(txBytes)}</p>
+                              <p className="text-[10px] text-slate-400">{txPkts} pacotes</p>
+                            </div>
+                            <div>
+                              <p className="text-slate-400">Recebido</p>
+                              <p className="font-mono font-bold text-slate-700 dark:text-slate-300">{fmtBytes(rxBytes)}</p>
+                              <p className="text-[10px] text-slate-400">{rxPkts} pacotes</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-3">
+                          <div className="text-sm font-bold text-slate-900 dark:text-white">Connection Request</div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">ACS Public URL (override)</label>
+                            <input
+                              type="text"
+                              defaultValue={selected.acsPublicUrlOverride || ''}
+                              placeholder="http://acs.mydomain.com:7547"
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim() || undefined;
+                                try {
+                                  const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { acsPublicUrlOverride: val });
+                                  setSelected((prev: any) => ({ ...prev, acsPublicUrlOverride: data.acsPublicUrlOverride }));
+                                } catch {}
+                              }}
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Device ConnectionRequest URL</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                defaultValue={selected.connectionRequestUrl || ''}
+                                placeholder="http://192.168.1.1:7547/"
+                                onBlur={async (e) => {
+                                  const val = e.target.value.trim() || undefined;
+                                  try {
+                                    const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestUrl: val });
+                                    setSelected((prev: any) => ({ ...prev, connectionRequestUrl: data.connectionRequestUrl }));
+                                  } catch {}
+                                }}
+                                className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                              />
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-1">Reported by CPE or configured manually</p>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Connection Request Username</label>
+                            <input
+                              type="text"
+                              defaultValue={selected.connectionRequestUsername || ''}
+                              placeholder={selected.serial || 'serial'}
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim() || undefined;
+                                try {
+                                  const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestUsername: val });
+                                  setSelected((prev: any) => ({ ...prev, connectionRequestUsername: data.connectionRequestUsername }));
+                                } catch {}
+                              }}
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                            />
+                            <p className="text-[10px] text-slate-400 mt-1">Default: device serial</p>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Connection Request Password</label>
+                            <input
+                              type="password"
+                              defaultValue={selected.connectionRequestPassword || ''}
+                              placeholder={selected.serial || 'serial'}
+                              onBlur={async (e) => {
+                                const val = e.target.value.trim() || undefined;
+                                try {
+                                  const { data } = await api.patch(`/devices/${selected.id}/acs-config`, { connectionRequestPassword: val });
+                                  setSelected((prev: any) => ({ ...prev, connectionRequestPassword: data.connectionRequestPassword }));
+                                } catch {}
+                              }}
+                              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                            />
+                            <p className="text-[10px] text-slate-400 mt-1">Default: device serial</p>
+                          </div>
+
+                          <button
+                            onClick={async () => {
+                              try {
+                                const { data } = await api.post(`/devices/${selected.id}/connection-request`);
+                                alert(data.message);
+                              } catch (err: any) {
+                                alert(err.response?.data?.message || 'Connection request failed');
+                              }
+                            }}
+                            disabled={!selected.connectionRequestUrl}
+                            className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 transition-opacity disabled:opacity-40"
+                          >
+                            <ExternalLink size={14} /> Send Connection Request
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </section>
             )}
@@ -959,23 +1067,51 @@ export default function Devices() {
                               <span>BW: <strong className="text-slate-700 dark:text-slate-300">{bandwidth}</strong></span>
                             </div>
 
-                            <div className="mt-2 flex gap-1.5">
+                            <div className="mt-2 flex gap-1.5 items-center">
                               <button
                                 onClick={async () => {
                                   const sid = (document.getElementById(`wifi-ssid-${idx}`) as HTMLInputElement).value;
                                   const pw = (document.getElementById(`wifi-password-${idx}`) as HTMLInputElement).value;
                                   if (!sid || !pw) { alert('Fill in both SSID and password'); return; }
+                                  setWifiSaving(idx);
+                                  setWifiSaveMsg(null);
                                   try {
                                     const { data } = await api.post(`/devices/${selected.id}/wifi`, { ssid: sid, password: pw, instance: Number(idx) });
-                                    alert(data.message);
-                                    selectDevice(selected.id);
+                                    setWifiSaveMsg('Salvo! Aguardando CPE aplicar...');
+                                    // Poll task status
+                                    const taskId = data.task?.id;
+                                    if (taskId) {
+                                      let attempts = 0;
+                                      const poll = setInterval(async () => {
+                                        try {
+                                          const { data: t } = await api.get(`/tasks/${taskId}`);
+                                          if (t.status === 'COMPLETED') {
+                                            setWifiSaveMsg('Aplicado com sucesso!');
+                                            clearInterval(poll);
+                                            setWifiSaving(null);
+                                            selectDevice(selected.id);
+                                          } else if (t.status === 'FAILED') {
+                                            setWifiSaveMsg('Falhou: ' + (t.error || 'erro desconhecido'));
+                                            clearInterval(poll);
+                                            setWifiSaving(null);
+                                          } else {
+                                            setWifiSaveMsg(`Fila: ${t.status} (tentativa ${t.attempts || 0}/${t.maxAttempts || 3})`);
+                                          }
+                                        } catch { clearInterval(poll); setWifiSaving(null); }
+                                        if (++attempts > 30) { clearInterval(poll); setWifiSaving(null); setWifiSaveMsg('Timeout'); }
+                                      }, 3000);
+                                    } else {
+                                      setTimeout(() => { setWifiSaving(null); selectDevice(selected.id); }, 2000);
+                                    }
                                   } catch (err: any) {
-                                    alert(err.response?.data?.message || 'Failed to save WiFi config');
+                                    setWifiSaveMsg('Erro: ' + (err.response?.data?.message || err.message));
+                                    setTimeout(() => setWifiSaving(null), 3000);
                                   }
                                 }}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-primary text-white hover:opacity-90"
+                                disabled={wifiSaving === idx}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-primary text-white hover:opacity-90 disabled:opacity-40"
                               >
-                                <Save size={10} /> Save
+                                <Save size={10} /> {wifiSaving === idx ? 'Salvando...' : 'Salvar'}
                               </button>
                               <button
                                 onClick={async () => {
@@ -1000,6 +1136,9 @@ export default function Devices() {
                               >
                                 <RefreshCw size={10} /> Read
                               </button>
+                              {wifiSaving === idx && wifiSaveMsg && (
+                                <span className="text-[10px] text-warning font-semibold ml-2">{wifiSaveMsg}</span>
+                              )}
                             </div>
                           </div>
                         );
@@ -1023,7 +1162,7 @@ export default function Devices() {
               </section>
             )}
 
-            {activeTab === 'Discovery' && (
+            {activeTab === 'Descoberta' && (
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parameter Discovery</h4>
@@ -1127,7 +1266,7 @@ export default function Devices() {
               </section>
             )}
 
-            {activeTab === 'Clients' && (
+            {activeTab === 'Clientes' && (
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Connected Clients</h4>
@@ -1158,7 +1297,7 @@ export default function Devices() {
                     <table className="w-full text-left">
                       <thead>
                         <tr className="border-b border-slate-100 dark:border-slate-800">
-                          {['MAC', 'Signal (RSSI)', 'SNR', 'Noise', 'TX Rate', 'RX Rate', 'IP', 'Last Seen'].map(h => (
+                          {['Hostname', 'MAC', 'Signal (RSSI)', 'SNR', 'TX Rate', 'RX Rate', 'IP', 'Last Seen'].map(h => (
                             <th key={h} className="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
@@ -1166,6 +1305,7 @@ export default function Devices() {
                       <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                         {connectedDevices.map((client: any, i: number) => (
                           <tr key={client.mac || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="px-2 py-2 text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[120px]">{client.name || client.hostname || '-'}</td>
                             <td className="px-2 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white">{client.mac || client.MACAddress || '-'}</td>
                             <td className="px-2 py-2">
                               <div className="flex items-center gap-1.5">
@@ -1174,9 +1314,8 @@ export default function Devices() {
                               </div>
                             </td>
                             <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.snr || client.SNR || '-'}</td>
-                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.noise || client.Noise || '-'}</td>
-                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.txRate || client.TXRate || client['X_ZTE-COM_TransmitRate'] || '-'}</td>
-                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.rxRate || client.RXRate || client['X_ZTE-COM_ReceiveRate'] || '-'}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.txRate || client.TXRate || '-'}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.rxRate || client.RXRate || '-'}</td>
                             <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.ip || client.IPAddress || '-'}</td>
                             <td className="px-2 py-2 text-xs text-slate-400">{client.lastSeen || client.LastSeen || '-'}</td>
                           </tr>
