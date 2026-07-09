@@ -1159,10 +1159,15 @@ export class CwmpService {
         const mac = params[`${basePath}.AssociatedDeviceMACAddress`];
         if (!mac) break;
 
+        const rawName = params[`${basePath}.X_ZTE-COM_AssociatedDeviceName`];
+        const name = rawName && typeof rawName === 'object'
+          ? (rawName as any)._value || (rawName as any).value || rawName.toString().replace(/^\{?@_xsi:type[^}]*\}?$/, '').trim()
+          : typeof rawName === 'string' ? rawName : '';
+
         connectedDevices.push({
           wlan,
           mac,
-          name: params[`${basePath}.X_ZTE-COM_AssociatedDeviceName`] || '',
+          name,
           ip: params[`${basePath}.AssociatedDeviceIPAddress`] || '',
           rssi: parseInt(params[`${basePath}.AssociatedDeviceRssi`] || '0'),
           snr: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_SNR`] || '0'),

@@ -479,7 +479,9 @@ export default function Devices() {
                             ?? ''
                           );
                           const active = enable === '1' || enable.toLowerCase() === 'true';
-                         const ssid = get(i,
+                          // Overview only shows active WiFi interfaces.
+                          if (!active) return null;
+                          const ssid = get(i,
                            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`,
                            `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`,
                            `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`,
