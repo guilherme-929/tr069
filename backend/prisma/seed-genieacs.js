@@ -296,6 +296,85 @@ const provisions = [
     "actions": [
       { "type": "log", "message": "FWUPgrade_UN1200X: checking firmware" }
     ]
+  },
+  // WiFi standardization provisions — these set SSID and KeyPassphrase for
+  // both 2.4GHz (instance 1) and 5GHz (instances 2 and 5, covering most
+  // models). The CPE gracefully ignores instances it does not implement.
+  {
+    "name": "wifi2g-padronizacao",
+    "type": "provision",
+    "channel": "default",
+    "precondition": null,
+    "actions": [
+      { "type": "log", "message": "wifi2g-padronizacao: padronizando WiFi 2.4GHz" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable", "value": true },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Standard", "value": "b,g,n" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.BandWidth", "value": "Auto" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.WPS.Enable", "value": false }
+    ]
+  },
+  {
+    "name": "wifi5g-padronizacao",
+    "type": "provision",
+    "channel": "default",
+    "precondition": null,
+    "actions": [
+      { "type": "log", "message": "wifi5g-padronizacao: padronizando WiFi 5GHz (instancias 2 e 5)" },
+      // Instance 2 (Huawei, Stavix, UNEE, Tenda)
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Enable", "value": true },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Standard", "value": "a,n,ac" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.BandWidth", "value": "Auto" },
+      // Instance 5 (ZTE F670L)
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Enable", "value": true },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Standard", "value": "a,n,ac" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.BandWidth", "value": "Auto" }
+    ]
+  },
+  {
+    "name": "wifi-padronizacao-completa",
+    "type": "provision",
+    "channel": "default",
+    "precondition": null,
+    "actions": [
+      { "type": "log", "message": "wifi-padronizacao-completa: padronizando WiFi 2.4GHz + 5GHz" },
+      // 2.4GHz
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable", "value": true },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Standard", "value": "b,g,n" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.BandWidth", "value": "Auto" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.WPS.Enable", "value": false },
+      // 5GHz instance 2
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Enable", "value": true },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Standard", "value": "a,n,ac" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.BandWidth", "value": "Auto" },
+      // 5GHz instance 5 (ZTE)
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Enable", "value": true },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Standard", "value": "a,n,ac" },
+      { "type": "setParameter", "path": "InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.BandWidth", "value": "Auto" }
+    ]
+  }
+];
+
+const presets = [
+  {
+    "name": "preset-wifi-padronizacao-completa",
+    "type": "preset",
+    "channel": "default",
+    "precondition": null,
+    "script": "wifi-padronizacao-completa"
+  },
+  {
+    "name": "preset-wifi5g-padronizacao",
+    "type": "preset",
+    "channel": "bootstrap",
+    "precondition": null,
+    "script": "wifi5g-padronizacao"
+  },
+  {
+    "name": "preset-wifi2g-padronizacao",
+    "type": "preset",
+    "channel": "bootstrap",
+    "precondition": null,
+    "script": "wifi2g-padronizacao"
   }
 ];
 
@@ -318,11 +397,28 @@ async function seed() {
         },
       });
       count++;
-      console.log(`  Created script: ${p.name}`);
+      console.log(`  Created provision: ${p.name}`);
     } else {
       console.log(`  Already exists: ${p.name}`);
     }
   }
+
+  for (const p of presets) {
+    const existing = await prisma.script.findUnique({ where: { name: p.name } });
+    if (!existing) {
+      await prisma.script.create({
+        data: {
+          ...p,
+          tenantId: tenant.id,
+        },
+      });
+      count++;
+      console.log(`  Created preset: ${p.name}`);
+    } else {
+      console.log(`  Already exists: ${p.name}`);
+    }
+  }
+
   console.log(`\nSeeded ${count} GenieACS scripts.`);
 }
 

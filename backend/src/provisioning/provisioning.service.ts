@@ -6,10 +6,38 @@ import { ConfigService } from '../system-config/config.service';
 export class ProvisioningService {
   private readonly logger = new Logger(ProvisioningService.name);
 
+  // Model-to-5G-instance mapping (from GenieACS legacy config).
+  // Different CPE models expose 5GHz WiFi on different TR-098 WLANConfiguration
+  // instances. Instance 1 is always 2.4GHz.
+  private readonly MODEL_5G_INSTANCE: Record<string, number> = {
+    F670L: 5,
+    EG8145X6: 2,
+    EG8145V5: 2,
+    'EG8145V5-V2': 2,
+    MP_X421RQ_F: 2,
+    MP_G421R: 2,
+    MP_X421R: 2,
+    UN1200X_AC: 2,
+    AC10: 2,
+    HG8546: 2,
+    HG8546M: 2,
+    HS8145V: 2,
+    'G-140W-C': 2,
+  };
+
   constructor(
     private prisma: PrismaService,
     private configService: ConfigService,
   ) {}
+
+  private getWifi5GInstance(modelName: string): number {
+    // Normalize: replace spaces, hyphens, dots with underscores
+    const normalized = modelName.replace(/[\s\-\.]/g, '_');
+    for (const [key, inst] of Object.entries(this.MODEL_5G_INSTANCE)) {
+      if (normalized.includes(key) || key.includes(normalized)) return inst;
+    }
+    return 2; // default fallback: instance 2
+  }
 
   async provisionDevice(deviceId: string, tenantId: string, template?: any) {
     const device = await this.prisma.device.findUnique({
@@ -37,14 +65,26 @@ export class ProvisioningService {
       'InternetGatewayDevice.ManagementServer.PeriodicInformEnable': periodicInformEnable,
     };
 
+    // WiFi provisioning: apply tenant defaults to both 2.4GHz and 5GHz bands.
+    // The tenant config supports per-band overrides:
+    //   - ssid / password    → fallback applied to BOTH bands
+    //   - ssid2g / password2g → 2.4GHz specific (overrides ssid/password)
+    //   - ssid5g / password5g → 5GHz specific (overrides ssid/password)
     const wifiConfig = (device.tenant.defaultWiFiConfig as Record<string, string>) || {};
-    if (wifiConfig.ssid && wifiConfig.password) {
-      // Use the TR-098 WLANConfiguration.* namespace (the spec standard that
-      // this ZTE fleet implements). Avoid Device.WiFi.* (TR-181) here since a
-      // SetParameterValues with a non-existent path makes the CPE reject the
-      // whole request with SOAP Fault 9005.
-      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] = wifiConfig.ssid;
-      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] = wifiConfig.password;
+    const ssid2g = wifiConfig.ssid2g || wifiConfig.ssid;
+    const pass2g = wifiConfig.password2g || wifiConfig.password;
+    const ssid5g = wifiConfig.ssid5g || wifiConfig.ssid;
+    const pass5g = wifiConfig.password5g || wifiConfig.password;
+
+    if (ssid2g && pass2g) {
+      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] = ssid2g;
+      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] = pass2g;
+    }
+
+    if (ssid5g && pass5g) {
+      const inst5g = this.getWifi5GInstance(device.modelName);
+      paramsWithCr[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${inst5g}.SSID`] = ssid5g;
+      paramsWithCr[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${inst5g}.KeyPassphrase`] = pass5g;
     }
 
     // Read parameter overrides from System Config (prefix: provision.param.)

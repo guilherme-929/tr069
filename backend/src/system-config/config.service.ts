@@ -76,6 +76,34 @@ export class ConfigService {
       { key: 'cwmp.inform.interval', value: '300', category: 'cwmp', description: 'Default periodic inform interval in seconds' },
       { key: 'cwmp.connectionRequestTimeout', value: '2000', category: 'cwmp', description: 'Connection request timeout in ms' },
       { key: 'device.default.periodicInformEnable', value: 'true', category: 'device', description: 'Enable periodic inform by default' },
+
+      // Virtual Parameter definitions (GenieACS-style VirtualParameters.*)
+      { key: 'virtualparam.vWifi-2G', value: JSON.stringify({
+        paths: [
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status',
+        ],
+        label: 'vWifi-2G',
+        description: 'WiFi 2.4GHz summary (SSID | Ch: X | Status)',
+        transform: 'join',
+        separator: ' | ',
+      }), category: 'virtual', description: 'Virtual parameter: WiFi 2.4GHz summary' },
+
+      { key: 'virtualparam.vWifi-5G', value: JSON.stringify({
+        paths: [
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Channel',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Status',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status',
+        ],
+        label: 'vWifi-5G',
+        description: 'WiFi 5GHz summary (SSID | Ch: X | Status)',
+        transform: 'join',
+        separator: ' | ',
+      }), category: 'virtual', description: 'Virtual parameter: WiFi 5GHz summary' },
     ];
 
     for (const d of defaults) {

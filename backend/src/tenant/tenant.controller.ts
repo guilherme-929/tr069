@@ -42,7 +42,14 @@ export class TenantController {
   @Patch('wifi-config')
   updateWiFiConfig(
     @CurrentUser('tenantId') tenantId: string,
-    @Body() body: { ssid?: string; password?: string },
+    @Body() body: {
+      ssid?: string;
+      password?: string;
+      ssid2g?: string;
+      password2g?: string;
+      ssid5g?: string;
+      password5g?: string;
+    },
   ) {
     return this.tenantService.updateWiFiConfig(tenantId, body);
   }

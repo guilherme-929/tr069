@@ -50,16 +50,27 @@ export class TenantService {
 
   async updateWiFiConfig(
     tenantId: string,
-    data: { ssid?: string; password?: string },
+    data: {
+      ssid?: string;
+      password?: string;
+      ssid2g?: string;
+      password2g?: string;
+      ssid5g?: string;
+      password5g?: string;
+    },
   ) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenant) throw new NotFoundException('Tenant not found');
 
-    const currentConfig = (tenant.defaultWiFiConfig as Record<string, string>) || {};
+    const currentConfig = (tenant.defaultWiFiConfig as Record<string, any>) || {};
     const newConfig = {
       ...currentConfig,
       ...(data.ssid !== undefined && { ssid: data.ssid }),
       ...(data.password !== undefined && { password: data.password }),
+      ...(data.ssid2g !== undefined && { ssid2g: data.ssid2g }),
+      ...(data.password2g !== undefined && { password2g: data.password2g }),
+      ...(data.ssid5g !== undefined && { ssid5g: data.ssid5g }),
+      ...(data.password5g !== undefined && { password5g: data.password5g }),
     };
 
     return this.prisma.tenant.update({
