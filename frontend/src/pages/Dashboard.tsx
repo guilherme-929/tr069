@@ -6,7 +6,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 
-const COLORS = ['#22c55e', '#ef4444', '#f59e0b', '#4e9fff'];
+const COLORS = ['#22c55e', '#ef4444', '#f59e0b', '#4e9fff', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#84cc16'];
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -18,17 +18,21 @@ export default function Dashboard() {
   const [models, setModels] = useState<any[]>([]);
   const [liveLogs, setLiveLogs] = useState<any[]>([]);
   const [wsConnected, setWsConnected] = useState(false);
+  const [availability, setAvailability] = useState<any[]>([]);
+  const [provisioningHourly, setProvisioningHourly] = useState<any[]>([]);
 
   useEffect(() => {
     api.get('/acs/stats').then(({ data }) => setStats(data)).catch(() => {});
     api.get('/devices', { params: { limit: 5 } }).then(({ data }) => setRecentDevices(data.data || [])).catch(() => {});
     api.get('/models').then(({ data }) => {
       const items = data.data || data || [];
-      setModels(items.slice(0, 8));
+      setModels(items);
     }).catch(() => {});
     api.get('/logs', { params: { limit: 20 } }).then(({ data }) => {
       if (data.data) setLiveLogs(data.data);
     }).catch(() => {});
+    api.get('/acs/network-availability').then(({ data }) => setAvailability(data)).catch(() => {});
+    api.get('/acs/provisioning-per-hour').then(({ data }) => setProvisioningHourly(data)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -118,8 +122,28 @@ export default function Dashboard() {
               <p className="text-xs text-slate-500">Last 24 hours</p>
             </div>
           </div>
-          <div className="h-[300px] flex items-center justify-center">
-            <p className="text-sm text-slate-400">Timeline data will appear here once devices start reporting</p>
+          <div className="h-[300px]">
+            {availability.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={availability}>
+                <defs>
+                  <linearGradient id="availGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="hour" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(11, 16)} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
+                <Tooltip formatter={(v: number) => `${v}%`} labelFormatter={(l) => l.slice(11, 16)} />
+                <Area type="monotone" dataKey="availability" stroke="#22c55e" fill="url(#availGrad)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-sm text-slate-400">No availability data yet</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -158,14 +182,28 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Provisioning per Hour</h3>
-          <div className="h-[250px] flex items-center justify-center">
-            <p className="text-sm text-slate-400">Provisioning data will appear once devices are provisioned</p>
+          <div className="h-[250px]">
+            {provisioningHourly.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={provisioningHourly}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="hour" tick={{ fontSize: 10 }} tickFormatter={(v) => v.slice(11, 16)} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip labelFormatter={(l) => l.slice(11, 16)} />
+                <Bar dataKey="count" fill="#4e9fff" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-sm text-slate-400">No provisioning data yet</p>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Models Distribution</h3>
-          <div className="h-[250px] flex items-center justify-center">
+          <div className="h-[250px]">
             {models.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -187,7 +225,9 @@ export default function Dashboard() {
               </PieChart>
             </ResponsiveContainer>
             ) : (
-              <p className="text-sm text-slate-400">No models data</p>
+              <div className="h-full flex items-center justify-center">
+                <p className="text-sm text-slate-400">No models data</p>
+              </div>
             )}
           </div>
         </div>

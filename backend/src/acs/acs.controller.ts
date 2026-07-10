@@ -41,6 +41,22 @@ export class AcsController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Get('api/acs/provisioning-per-hour')
+  getProvisioningPerHour(@CurrentUser('tenantId') tenantId: string) {
+    return this.acsService.getProvisioningPerHour(tenantId);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
+  @Get('api/acs/network-availability')
+  getNetworkAvailability(@CurrentUser('tenantId') tenantId: string) {
+    return this.acsService.getNetworkAvailability(tenantId);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.TECHNICIAN)
   @Post('api/devices/:id/connection-request')
   connectionRequest(@Param('id') id: string) {
     return this.acsService.sendConnectionRequest(id);

@@ -401,7 +401,7 @@ export class AcsService implements OnModuleInit {
         this.prisma.device.count({ where: { tenantId } }),
         this.prisma.deviceModel.count({ where: { tenantId } }),
         this.prisma.firmware.count({ where: { tenantId } }),
-        this.prisma.alert.count({ where: { tenantId, resolved: false }, orderBy: { createdAt: 'desc' }, take: 5 }),
+        this.prisma.alert.findMany({ where: { tenantId, resolved: false }, orderBy: { createdAt: 'desc' }, take: 5 }),
       ]);
 
     const provisionedToday = await this.prisma.event.count({
@@ -409,6 +409,62 @@ export class AcsService implements OnModuleInit {
     });
 
     return { online, offline, totalDevices, totalModels, totalFirmwares, provisionedToday, alerts };
+  }
+
+  async getProvisioningPerHour(tenantId: string) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const events = await this.prisma.event.findMany({
+      where: { tenantId, createdAt: { gte: since } },
+      select: { createdAt: true },
+    });
+
+    const buckets: Record<string, number> = {};
+    for (let i = 0; i < 24; i++) {
+      const h = new Date(Date.now() - i * 60 * 60 * 1000);
+      const key = h.toISOString().slice(0, 13) + ':00';
+      buckets[key] = 0;
+    }
+
+    for (const ev of events) {
+      const key = new Date(ev.createdAt).toISOString().slice(0, 13) + ':00';
+      if (buckets[key] !== undefined) buckets[key]++;
+    }
+
+    return Object.entries(buckets)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([hour, count]) => ({ hour, count }));
+  }
+
+  async getNetworkAvailability(tenantId: string) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const onlineCounts = await this.prisma.device.count({ where: { tenantId, status: 'ONLINE' } });
+    const totalCounts = await this.prisma.device.count({ where: { tenantId } });
+
+    const events = await this.prisma.event.findMany({
+      where: { tenantId, createdAt: { gte: since } },
+      select: { createdAt: true, code: true },
+    });
+
+    const hourlyBuckets: Record<string, { total: number; online: number }> = {};
+    for (let i = 0; i < 24; i++) {
+      const h = new Date(Date.now() - i * 60 * 60 * 1000);
+      const key = h.toISOString().slice(0, 13) + ':00';
+      hourlyBuckets[key] = { total: totalCounts, online: 0 };
+    }
+
+    for (const ev of events) {
+      const key = new Date(ev.createdAt).toISOString().slice(0, 13) + ':00';
+      if (hourlyBuckets[key]) {
+        hourlyBuckets[key].online++;
+      }
+    }
+
+    return Object.entries(hourlyBuckets)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([hour, data]) => ({
+        hour,
+        availability: data.total > 0 ? Math.round((data.online / data.total) * 100) : 100,
+      }));
   }
 
   async getDevicesList(
