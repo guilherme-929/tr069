@@ -1018,127 +1018,209 @@ export default function Devices() {
                         </div>
                       )}
 
-                       {instances.map(([idx, params]) => {
-                         const ssid = params['SSID'] || params['SSID.SSID'] || '';
-                         const pwdKey = Object.keys(params).find(k => k.toLowerCase().includes('keypassphrase') || k.toLowerCase().includes('presharedkey'));
-                         const password = pwdKey ? params[pwdKey] : '';
-                         const enabled = params['Enable'] === '1' || params['Enable'] === 'true' || params['SSID.Enable'] === '1' || params['AccessPoint.Enable'] === '1';
-                         const channel = params['Channel'] || '-';
-                         const standard = params['Standard'] || params['X_ZTE-COM_Standard'] || '-';
-                         const bandwidth = params['X_ZTE-COM_BandWidth'] || params['OperatingStandards'] || '-';
-                         const associations = params['TotalAssociations'] || params['X_ZTE-COM_TotalAssociations'] || '-';
-                         const freqBand = params['OperatingFrequencyBand'] || params['X_ZTE-COM_OperatingFrequencyBand'] || params['SSID.X_ZTE-COM_OperatingFrequencyBand'] || bandLabels[idx] || `Band ${idx}`;
-                        return (
-                          <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700/50">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-2.5 h-2.5 rounded-full ${enabled ? 'bg-success' : 'bg-slate-300'}`} />
-                                <span className="text-sm font-bold text-slate-900 dark:text-white">WLAN {idx} — {freqBand}</span>
-                              </div>
-                              <span className="text-[10px] font-mono text-slate-400">{associations} clients</span>
-                            </div>
+{instances.map(([idx, params]) => {
+                          const ssid = params['SSID'] || params['SSID.SSID'] || '';
+                          const pwdKey = Object.keys(params).find(k => k.toLowerCase().includes('keypassphrase') || k.toLowerCase().includes('presharedkey'));
+                          const password = pwdKey ? params[pwdKey] : '';
+                          const enabled = params['Enable'] === '1' || params['Enable'] === 'true' || params['SSID.Enable'] === '1' || params['AccessPoint.Enable'] === '1';
+                          const channel = params['Channel'] || '-';
+                          const standard = params['Standard'] || params['X_ZTE-COM_Standard'] || '-';
+                          const bandwidth = params['X_ZTE-COM_BandWidth'] || params['OperatingStandards'] || '-';
+                          const associations = params['TotalAssociations'] || params['X_ZTE-COM_TotalAssociations'] || '-';
+                          const freqBand = params['OperatingFrequencyBand'] || params['X_ZTE-COM_OperatingFrequencyBand'] || params['SSID.X_ZTE-COM_OperatingFrequencyBand'] || bandLabels[idx] || `Band ${idx}`;
+                         return (
+                           <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700/50">
+                             <div className="flex items-center justify-between mb-3">
+                               <div className="flex items-center gap-3">
+                                 <div className={`w-3 h-3 rounded-full ${enabled ? 'bg-success' : 'bg-slate-300'}`} />
+                                 <div>
+                                   <span className="text-sm font-bold text-slate-900 dark:text-white">WLAN {idx} — {freqBand}</span>
+                                   <div className="text-[10px] text-slate-400 font-mono">Channel: {channel} | Clients: {associations}</div>
+                                 </div>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                 <button
+                                   onClick={async () => {
+                                     setWifiSaving(`toggle-${idx}`);
+                                     setWifiSaveMsg(null);
+                                     try {
+                                       const { data } = await api.post(`/devices/${selected.id}/wifi/enable`, {
+                                         enabled: !enabled,
+                                         instance: Number(idx)
+                                       });
+                                       setWifiSaveMsg(`WiFi ${!enabled ? 'enabled' : 'disabled'}! Waiting for CPE to apply...`);
+                                       // Poll task status
+                                       const taskId = data.task?.id;
+                                       if (taskId) {
+                                         let attempts = 0;
+                                         const poll = setInterval(async () => {
+                                           try {
+                                             const { data: t } = await api.get(`/tasks/${taskId}`);
+                                             if (t.status === 'COMPLETED') {
+                                               setWifiSaveMsg(`WiFi ${!enabled ? 'enabled' : 'disabled'} successfully!`);
+                                               clearInterval(poll);
+                                               setWifiSaving(null);
+                                               selectDevice(selected.id);
+                                             } else if (t.status === 'FAILED') {
+                                               setWifiSaveMsg(`Failed to ${!enabled ? 'enable' : 'disable'} WiFi: ` + (t.error || 'unknown error'));
+                                               clearInterval(poll);
+                                               setWifiSaving(null);
+                                             } else {
+                                               setWifiSaveMsg(`Queue: ${t.status} (attempt ${t.attempts || 0}/${t.maxAttempts || 3})`);
+                                             }
+                                           } catch { clearInterval(poll); setWifiSaving(null); }
+                                           if (++attempts > 30) { clearInterval(poll); setWifiSaving(null); setWifiSaveMsg('Timeout'); }
+                                         }, 3000);
+                                       } else {
+                                         setTimeout(() => { setWifiSaving(null); selectDevice(selected.id); }, 2000);
+                                       }
+                                     } catch (err: any) {
+                                       setWifiSaveMsg('Error: ' + (err.response?.data?.message || err.message));
+                                       setTimeout(() => setWifiSaving(null), 3000);
+                                     }
+                                   }}
+                                   disabled={wifiSaving?.startsWith('toggle-')}
+                                   className={`flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold transition-all ${enabled
+                                     ? 'bg-success/10 text-success hover:bg-success/20 border border-success/20'
+                                     : 'bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-200 dark:hover:bg-slate-700'
+                                   } disabled:opacity-40`}
+                                 >
+                                   {enabled ? 'Disable' : 'Enable'} WiFi
+                                 </button>
+                               </div>
+                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 mb-2">
-                              <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase block">SSID</label>
-                                <input
-                                  type="text"
-                                  defaultValue={ssid}
-                                  id={`wifi-ssid-${idx}`}
-                                  className="w-full px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] font-bold text-slate-400 uppercase block">Password</label>
-                                <div className="relative">
-                                  <input
-                                    type={showPassword ? 'text' : 'password'}
-                                    defaultValue={password}
-                                    id={`wifi-password-${idx}`}
-                                    className="w-full pr-7 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
-                                  />
-                                </div>
-                              </div>
-                            </div>
+                             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                               <div className="space-y-1">
+                                 <label className="text-[10px] font-bold text-slate-400 uppercase block">Network Name (SSID)</label>
+                                 <input
+                                   type="text"
+                                   defaultValue={ssid}
+                                   id={`wifi-ssid-${idx}`}
+                                   className="w-full px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                                 />
+                               </div>
+                               <div className="space-y-1">
+                                 <label className="text-[10px] font-bold text-slate-400 uppercase block">Password</label>
+                                 <div className="relative">
+                                   <input
+                                     type={showPassword ? 'text' : 'password'}
+                                     defaultValue={password}
+                                     id={`wifi-password-${idx}`}
+                                     className="w-full pr-7 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-mono focus:ring-2 focus:ring-primary/20 outline-none"
+                                   />
+                                 </div>
+                               </div>
+                               <div className="space-y-1">
+                                 <label className="text-[10px] font-bold text-slate-400 uppercase block">Security Standard</label>
+                                 <div className="px-2 py-1.5 text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700">
+                                   {standard}
+                                 </div>
+                               </div>
+                             </div>
 
-                            <div className="flex flex-wrap gap-3 text-[10px] font-mono text-slate-500">
-                              <span>Ch: <strong className="text-slate-700 dark:text-slate-300">{channel}</strong></span>
-                              <span>Std: <strong className="text-slate-700 dark:text-slate-300">{standard}</strong></span>
-                              <span>BW: <strong className="text-slate-700 dark:text-slate-300">{bandwidth}</strong></span>
-                            </div>
+                             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                               <div className="flex flex-wrap gap-3 text-[10px] font-mono text-slate-500">
+                                 <span>Channel: <strong className="text-slate-700 dark:text-slate-300">{channel}</strong></span>
+                                 <span>Bandwidth: <strong className="text-slate-700 dark:text-slate-300">{bandwidth}</strong></span>
+                               </div>
 
-                            <div className="mt-2 flex gap-1.5 items-center">
-                              <button
-                                onClick={async () => {
-                                  const sid = (document.getElementById(`wifi-ssid-${idx}`) as HTMLInputElement).value;
-                                  const pw = (document.getElementById(`wifi-password-${idx}`) as HTMLInputElement).value;
-                                  if (!sid || !pw) { alert('Fill in both SSID and password'); return; }
-                                  setWifiSaving(idx);
-                                  setWifiSaveMsg(null);
-                                  try {
-                                    const { data } = await api.post(`/devices/${selected.id}/wifi`, { ssid: sid, password: pw, instance: Number(idx) });
-                                    setWifiSaveMsg('Salvo! Aguardando CPE aplicar...');
-                                    // Poll task status
-                                    const taskId = data.task?.id;
-                                    if (taskId) {
-                                      let attempts = 0;
-                                      const poll = setInterval(async () => {
-                                        try {
-                                          const { data: t } = await api.get(`/tasks/${taskId}`);
-                                          if (t.status === 'COMPLETED') {
-                                            setWifiSaveMsg('Aplicado com sucesso!');
-                                            clearInterval(poll);
-                                            setWifiSaving(null);
-                                            selectDevice(selected.id);
-                                          } else if (t.status === 'FAILED') {
-                                            setWifiSaveMsg('Falhou: ' + (t.error || 'erro desconhecido'));
-                                            clearInterval(poll);
-                                            setWifiSaving(null);
-                                          } else {
-                                            setWifiSaveMsg(`Fila: ${t.status} (tentativa ${t.attempts || 0}/${t.maxAttempts || 3})`);
-                                          }
-                                        } catch { clearInterval(poll); setWifiSaving(null); }
-                                        if (++attempts > 30) { clearInterval(poll); setWifiSaving(null); setWifiSaveMsg('Timeout'); }
-                                      }, 3000);
-                                    } else {
-                                      setTimeout(() => { setWifiSaving(null); selectDevice(selected.id); }, 2000);
-                                    }
-                                  } catch (err: any) {
-                                    setWifiSaveMsg('Erro: ' + (err.response?.data?.message || err.message));
-                                    setTimeout(() => setWifiSaving(null), 3000);
-                                  }
-                                }}
-                                disabled={wifiSaving === idx}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold bg-primary text-white hover:opacity-90 disabled:opacity-40"
-                              >
-                                <Save size={10} /> {wifiSaving === idx ? 'Salvando...' : 'Salvar'}
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const { data } = await api.post(`/devices/${selected.id}/wifi/read`, { instance: Number(idx) });
-                                    if (data.source === 'cache' && data.params) {
-                                      const merged = { ...allParams, ...data.params };
-                                      // Refresh the view by forcing re-render with merged params
-                                      setSelected((prev: any) => ({
-                                        ...prev,
-                                        parameters: { ...prev.parameters, ...merged },
-                                      }));
-                                      alert('WiFi parameters loaded');
-                                    } else {
-                                      alert(data.message + ' Refresh after CPE connects.');
-                                    }
-                                  } catch (err: any) {
-                                    alert(err.response?.data?.message || 'Failed to read WiFi config');
-                                  }
-                                }}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-bold border border-slate-200 hover:bg-slate-50"
-                              >
-                                <RefreshCw size={10} /> Read
-                              </button>
-                              {wifiSaving === idx && wifiSaveMsg && (
-                                <span className="text-[10px] text-warning font-semibold ml-2">{wifiSaveMsg}</span>
-                              )}
+                               <div className="flex items-center gap-2">
+                                 <button
+                                   onClick={async () => {
+                                     const sid = (document.getElementById(`wifi-ssid-${idx}`) as HTMLInputElement).value;
+                                     const pw = (document.getElementById(`wifi-password-${idx}`) as HTMLInputElement).value;
+                                     if (!sid || !pw) { alert('Fill in both SSID and password'); return; }
+                                     setWifiSaving(idx);
+                                     setWifiSaveMsg(null);
+                                     try {
+                                       const { data } = await api.post(`/devices/${selected.id}/wifi`, { ssid: sid, password: pw, instance: Number(idx) });
+                                       setWifiSaveMsg('Saved! Waiting for CPE to apply...');
+                                       // Poll task status
+                                       const taskId = data.task?.id;
+                                       if (taskId) {
+                                         let attempts = 0;
+                                         const poll = setInterval(async () => {
+                                           try {
+                                             const { data: t } = await api.get(`/tasks/${taskId}`);
+                                             if (t.status === 'COMPLETED') {
+                                               setWifiSaveMsg('Applied successfully!');
+                                               clearInterval(poll);
+                                               setWifiSaving(null);
+                                               selectDevice(selected.id);
+                                             } else if (t.status === 'FAILED') {
+                                               setWifiSaveMsg('Failed: ' + (t.error || 'unknown error'));
+                                               clearInterval(poll);
+                                               setWifiSaving(null);
+                                             } else {
+                                               setWifiSaveMsg(`Queue: ${t.status} (attempt ${t.attempts || 0}/${t.maxAttempts || 3})`);
+                                             }
+                                           } catch { clearInterval(poll); setWifiSaving(null); }
+                                           if (++attempts > 30) { clearInterval(poll); setWifiSaving(null); setWifiSaveMsg('Timeout'); }
+                                         }, 3000);
+                                       } else {
+                                         setTimeout(() => { setWifiSaving(null); selectDevice(selected.id); }, 2000);
+                                       }
+                                     } catch (err: any) {
+                                       setWifiSaveMsg('Error: ' + (err.response?.data?.message || err.message));
+                                       setTimeout(() => setWifiSaving(null), 3000);
+                                     }
+                                   }}
+                                   disabled={wifiSaving === idx}
+                                   className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-bold bg-primary text-white hover:opacity-90 disabled:opacity-40 transition-all"
+                                 >
+                                   <Save size={10} /> {wifiSaving === idx ? 'Saving...' : 'Save Configuration'}
+                                 </button>
+                                 <button
+                                   onClick={async () => {
+                                     try {
+                                       const { data } = await api.post(`/devices/${selected.id}/wifi/read`, { instance: Number(idx) });
+                                       if (data.source === 'cache' && data.params) {
+                                         const merged = { ...allParams, ...data.params };
+                                         // Refresh the view by forcing re-render with merged params
+                                         setSelected((prev: any) => ({
+                                           ...prev,
+                                           parameters: { ...prev.parameters, ...merged },
+                                         }));
+                                         alert('WiFi parameters loaded');
+                                       } else {
+                                         alert(data.message + ' Refresh after CPE connects.');
+                                       }
+                                     } catch (err: any) {
+                                       alert(err.response?.data?.message || 'Failed to read WiFi config');
+                                     }
+                                   }}
+                                   className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-bold border border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                                 >
+                                   <RefreshCw size={10} /> Read from CPE
+                                 </button>
+                               </div>
+                             </div>
+
+                             {wifiSaving === idx && wifiSaveMsg && (
+                               <div className="mt-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded text-[10px] text-warning font-medium">
+                                 {wifiSaveMsg}
+                               </div>
+                             )}
+                           </div>
+                         );
+                       })}
+
+                       {hasDiscoveredWifi && (
+                         <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                           <div className="flex items-center justify-between mb-2">
+                             <div className="text-sm font-bold text-slate-900 dark:text-white">Raw Discovered WiFi Params</div>
+                             <div className="text-[10px] text-slate-400 font-mono">Debug Info</div>
+                           </div>
+                           <div className="max-h-40 overflow-y-auto space-y-0.5 font-mono text-[10px]">
+                             {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => (
+                               <p key={key} className="text-slate-500 break-all">
+                                 <span className="text-primary">{key}</span> = <span className="text-slate-700 dark:text-slate-300">{String(val)}</span>
+                               </p>
+                             ))}
+                           </div>
+                         </div>
+                       )}
                             </div>
                           </div>
                         );
@@ -1225,24 +1307,9 @@ export default function Devices() {
                   </div>
                 )}
 
-                {discoveryStatus?.wifiParams && Object.keys(discoveryStatus.wifiParams).length > 0 && (
+                {discoveryStatus?.parameters && Object.keys(discoveryStatus.parameters as Record<string, string>).length > 0 && (
                   <div className="mt-4">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Discovered WiFi Parameters</h4>
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-80 overflow-y-auto space-y-1">
-                      {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => (
-                        <p key={key} className="text-slate-600 dark:text-slate-400 break-all">
-                          <span className="text-green-600 dark:text-green-400">{key}</span>
-                          <span className="text-slate-300"> = </span>
-                          <span className="text-slate-900 dark:text-white">{String(val)}</span>
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {discoveryStatus?.parameters && (
-                  <div className="mt-4">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">All Discovered Parameters ({Object.keys(discoveryStatus.parameters).length})</h4>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">All Discovered Parameters ({Object.keys(discoveryStatus.parameters as Record<string, string>).length})</h4>
                     <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg font-mono text-xs max-h-80 overflow-y-auto space-y-1">
                       {Object.entries(discoveryStatus.parameters as Record<string, string>).sort().map(([key, val]) => (
                         <p key={key} className="text-slate-600 dark:bg-slate-800/50 break-all">
@@ -1260,7 +1327,7 @@ export default function Devices() {
                     <RadioTower size={32} className="mx-auto text-slate-300 mb-2" />
                     <p className="text-sm text-slate-400">Click "Scan All Parameters" to discover all TR-069 parameters available on this device.</p>
                     <p className="text-xs text-slate-400 mt-1">The scan runs recursively and fetches values for each parameter.</p>
-                    <p className="text-xs text-warning mt-2 font-semibold">Nota: Alguns modelos de CPE (ex: ZTE) podem rejeitar GetParameterNames/GetParameterValues com Fault 9005. Os parameters do Inform jah estao disponiveis na aba Overview.</p>
+                    <p className="text-xs text-warning mt-2 font-semibold">Note: Some CPE models (ex: ZTE) may reject GetParameterNames/GetParameterValues with Fault 9005. The Inform parameters are already available in the Overview tab.</p>
                   </div>
                 )}
               </section>
