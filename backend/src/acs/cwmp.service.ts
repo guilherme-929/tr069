@@ -936,6 +936,80 @@ export class CwmpService {
     return { task, message: 'WiFi configuration queued. Will be applied on next CPE connection.' };
   }
 
+  async handleSetWiFiEnable(
+    deviceId: string,
+    params: { enabled: boolean; instance: number },
+  ): Promise<any> {
+    const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
+    if (!device) throw new Error('Device not found');
+
+    const instance = Math.min(Math.max(parseInt(String(params.instance ?? 1), 10) || 1, 1), 8);
+    const value = params.enabled ? '1' : '0';
+
+    const currentParams = (device.parameters as Record<string, string>) || {};
+    const checkInstance = (prefix: string) =>
+      Object.keys(currentParams).some((k) =>
+        k.startsWith(prefix.replace('{i}', String(instance))),
+      );
+    const instHasWLAN = checkInstance('InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.');
+    const instHasZTE = checkInstance('InternetGatewayDevice.LANDevice.1.WIFI.SSID.{i}.');
+    const instHasTR181 = checkInstance('Device.WiFi.SSID.{i}.');
+
+    let wifiParams: { name: string; value: string }[];
+    if (instHasZTE) {
+      wifiParams = [
+        { name: `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${instance}.Enable`, value },
+        { name: `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${instance}.Enable`, value },
+      ];
+    } else if (instHasTR181) {
+      wifiParams = [
+        { name: `Device.WiFi.SSID.${instance}.Enable`, value },
+        { name: `Device.WiFi.AccessPoint.${instance}.Enable`, value },
+      ];
+    } else if (instHasWLAN) {
+      wifiParams = [
+        { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.Enable`, value },
+      ];
+    } else {
+      wifiParams = [
+        { name: `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${instance}.Enable`, value },
+      ];
+    }
+
+    const task = await this.prisma.task.create({
+      data: {
+        deviceId,
+        type: 'SetParameterValues',
+        status: 'PENDING',
+        payload: { params: wifiParams },
+        tenantId: device.tenantId,
+        createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      },
+    });
+
+    for (const p of wifiParams) {
+      currentParams[p.name] = p.value;
+    }
+    await this.prisma.device.update({
+      where: { id: deviceId },
+      data: { parameters: currentParams as any },
+    });
+
+    this.ws.broadcast('device:command', { deviceId, command: 'SetWiFi', timestamp: new Date() });
+
+    await this.prisma.log.create({
+      data: {
+        action: 'WIFI_ENABLE',
+        entity: 'DEVICE',
+        entityId: deviceId,
+        detail: `WiFi ${params.enabled ? 'enabled' : 'disabled'} for ${device.serial}`,
+        tenantId: device.tenantId,
+      },
+    });
+
+    return { task, message: `WiFi ${params.enabled ? 'enabled' : 'disabled'} queued.` };
+  }
+
   async handleReadWiFiConfig(deviceId: string): Promise<any> {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');
