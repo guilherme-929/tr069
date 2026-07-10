@@ -5,19 +5,40 @@ import { Plus, Edit2, Trash2, Cpu } from 'lucide-react';
 export default function Models() {
   const [models, setModels] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ manufacturer: '', name: '', hwVersion: '', dataModel: 'TR-181' });
 
   useEffect(() => {
     api.get('/models').then(({ data }) => setModels(data.data)).catch(() => {});
   }, []);
 
-  const createModel = async (e: React.FormEvent) => {
+  const openEdit = (m: any) => {
+    setForm({ manufacturer: m.manufacturer || '', name: m.name || '', hwVersion: m.hwVersion || '', dataModel: m.dataModel || 'TR-181' });
+    setEditingId(m.id);
+    setShowForm(true);
+  };
+
+  const submitModel = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const { data } = await api.post('/models', form);
-      setModels([data, ...models]);
+      if (editingId) {
+        const { data } = await api.put(`/models/${editingId}`, form);
+        setModels(models.map(m => m.id === editingId ? data : m));
+      } else {
+        const { data } = await api.post('/models', form);
+        setModels([data, ...models]);
+      }
       setShowForm(false);
+      setEditingId(null);
       setForm({ manufacturer: '', name: '', hwVersion: '', dataModel: 'TR-181' });
+    } catch {}
+  };
+
+  const deleteModel = async (id: string) => {
+    if (!confirm('Delete this model? This cannot be undone.')) return;
+    try {
+      await api.delete(`/models/${id}`);
+      setModels(models.filter(m => m.id !== id));
     } catch {}
   };
 
@@ -28,7 +49,7 @@ export default function Models() {
           <h1 className="text-2xl font-black text-slate-900 dark:text-white">Models & Firmware</h1>
           <p className="text-sm text-slate-500 mt-1">Manage device definitions and software distribution</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-md">
+        <button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ manufacturer: '', name: '', hwVersion: '', dataModel: 'TR-181' }); }} className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-bold hover:opacity-90 transition-opacity shadow-md">
           <Plus size={18} /> New Resource
         </button>
       </div>
@@ -66,8 +87,8 @@ export default function Models() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"><Edit2 size={16} /></button>
-                          <button className="p-1.5 hover:bg-danger/10 text-danger rounded"><Trash2 size={16} /></button>
+                          <button onClick={() => openEdit(m)} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"><Edit2 size={16} /></button>
+                          <button onClick={() => deleteModel(m.id)} className="p-1.5 hover:bg-danger/10 text-danger rounded"><Trash2 size={16} /></button>
                         </div>
                       </td>
                     </tr>
@@ -106,9 +127,9 @@ export default function Models() {
         {showForm && (
           <div className="w-96 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm h-fit">
             <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <Cpu size={20} className="text-primary" /> Add New Model
+              <Cpu size={20} className="text-primary" /> {editingId ? 'Edit Model' : 'Add New Model'}
             </h3>
-            <form onSubmit={createModel} className="space-y-4">
+            <form onSubmit={submitModel} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Manufacturer</label>
                 <input type="text" value={form.manufacturer} onChange={(e) => setForm({ ...form, manufacturer: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none" placeholder="e.g. ZTE" required />
@@ -131,7 +152,7 @@ export default function Models() {
                 </div>
               </div>
               <button type="submit" className="w-full bg-primary text-white py-2.5 rounded-lg font-bold text-sm hover:shadow-lg transition-all">
-                Register Device Model
+                {editingId ? 'Update Model' : 'Register Device Model'}
               </button>
             </form>
           </div>
