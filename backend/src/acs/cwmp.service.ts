@@ -253,6 +253,14 @@ export class CwmpService {
     }
 
     if (device) {
+      // Associate model if device doesn't have one yet
+      if (!device.modelId && manufacturer && modelName) {
+        const model = await this.prisma.deviceModel.findFirst({
+          where: { manufacturer, name: modelName },
+        });
+        if (model) device.modelId = model.id;
+      }
+
       device = await this.prisma.device.update({
         where: { id: device.id },
         data: {
@@ -264,6 +272,7 @@ export class CwmpService {
           modelName: modelName || device.modelName,
           firmwareVersion: firmwareVersion || device.firmwareVersion,
           uptime: uptime || device.uptime,
+          modelId: device.modelId,
           lastInform: new Date(),
           lastContact: new Date(),
           parameters: {
@@ -285,7 +294,15 @@ export class CwmpService {
         const model = await this.prisma.deviceModel.findFirst({
           where: { manufacturer, name: modelName },
         });
-        if (model) modelId = model.id;
+        if (model) {
+          modelId = model.id;
+        } else {
+          const fallback = await this.prisma.deviceModel.findFirst({
+            where: { manufacturer },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (fallback) modelId = fallback.id;
+        }
       }
 
       device = await this.prisma.device.create({
@@ -1061,9 +1078,14 @@ export class CwmpService {
     const hasZTE = allKnownKeys.some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
+    // When no WiFi namespace is detected from discovery/cache, fall back to
+    // TR-181 Device.WiFi.* paths as the most common standard. This covers
+    // CPEs like TP-Link that don't expose WiFi in GetParameterNames but may
+    // still respond to GetParameterValues for standard data model paths.
+    const noneDetected = !hasWLAN && !hasZTE && !hasTR181 && instances.length > 0;
     const useWLAN = hasWLAN;
     const useZTE = !hasWLAN && hasZTE;
-    const useTR181 = !hasWLAN && !hasZTE && hasTR181;
+    const useTR181 = !hasWLAN && !hasZTE && (hasTR181 || noneDetected);
 
     // Build the essential paths per instance (standard CWMP params that all
     // TR-098 CPEs support). These are safe to query and rarely fault.
@@ -1231,6 +1253,25 @@ export class CwmpService {
         createdTasks.push(hostTask);
         taskCount++;
       }
+    }
+
+    // If no tasks were queued and no WiFi namespace was detected, try to
+    // discover the Device.WiFi.* subtree via targeted GetParameterNames.
+    // Some CPEs (notably TP-Link) don't expose WiFi in the initial broad
+    // discovery but respond to a focused scan.
+    if (taskCount === 0 && !hasWLAN && !hasZTE && !hasTR181) {
+      const discTask = await this.prisma.task.create({
+        data: {
+          deviceId,
+          type: 'GetParameterNames',
+          status: 'PENDING',
+          payload: { parameterPath: 'Device.WiFi.', nextLevel: true },
+          tenantId: device.tenantId,
+        },
+      });
+      createdTasks.push(discTask);
+      taskCount++;
+      this.logger.log(`[WIFI_READ] Queued targeted discovery Device.WiFi. for ${device.serial}`);
     }
 
     await this.prisma.log.create({
