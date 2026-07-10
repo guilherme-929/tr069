@@ -1018,7 +1018,65 @@ export default function Devices() {
                         </div>
                       )}
 
-{instances.map(([idx, params]) => {
+{activeTab === 'WiFi' && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WiFi Configuration</h4>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { data } = await api.post(`/devices/${selected.id}/discover`);
+                        alert(data.message + ' Switch to Discovery tab to monitor progress.');
+                      } catch (err: any) {
+                        alert(err.response?.data?.message || 'Failed to start discovery');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors"
+                  >
+                    <RadioTower size={13} /> Discover All WiFi Params
+                  </button>
+                </div>
+
+                {(() => {
+                  const p = selected.parameters as Record<string, string> || {};
+                  const allParams = { ...p, ...(discoveryStatus?.wifiParams || {}) };
+
+                  // Group WLAN params by instance index
+                  const wlanInstances: Record<string, Record<string, string>> = {};
+                  Object.entries(allParams).forEach(([key, val]) => {
+                    const igdMatch = key.match(/InternetGatewayDevice\.LANDevice\.\d+\.WLANConfiguration\.(\d+)\.(.+)/);
+                    // Device.WiFi can expose SSID.{i}, AccessPoint.{i}, Radio.{i}, EndPoint.{i}
+                    const devMatch = key.match(/^Device\.WiFi\.(SSID|AccessPoint|Radio|EndPoint)\.(\d+)\.(.+)/);
+                    // ZTE (TR-098 variant) exposes WIFI.SSID.{i}, WIFI.AccessPoint.{i}, WIFI.Radio.{i}
+                    const zteMatch = key.match(/^InternetGatewayDevice\.LANDevice\.\d+\.WIFI\.(SSID|AccessPoint|Radio)\.(\d+)\.(.+)/);
+                    const idx = igdMatch?.[1] || devMatch?.[2] || zteMatch?.[2];
+                    let subKey: string = key;
+                    if (igdMatch?.[2]) subKey = igdMatch[2];
+                    else if (devMatch?.[3]) subKey = devMatch[3];
+                    else if (zteMatch) subKey = `${zteMatch[1]}.${zteMatch[3]}`;
+                    if (idx) {
+                      if (!wlanInstances[idx]) wlanInstances[idx] = {};
+                      wlanInstances[idx][subKey] = String(val);
+                    }
+                  });
+
+                  const bandLabels: Record<string, string> = { '1': '2.4 GHz', '2': '2.4 GHz (Guest)', '3': '5 GHz', '4': '5 GHz (Guest)', '5': '2.4 GHz IoT', '6': '5 GHz IoT', '7': '6 GHz', '8': '6 GHz (Guest)' };
+
+                  // Check if we have discoveryStatus for merge
+                  const hasDiscoveredWifi = discoveryStatus?.wifiParams && Object.keys(discoveryStatus.wifiParams).length > 0;
+
+                  const instances = Object.entries(wlanInstances).sort(([a], [b]) => Number(a) - Number(b));
+
+                  return (
+                    <div className="space-y-3">
+                      {instances.length === 0 && (
+                        <div className="p-6 text-center">
+                          <Wifi size={32} className="mx-auto text-slate-300 mb-2" />
+                          <p className="text-sm text-slate-400">No WiFi parameters found. Click "Discover All WiFi Params" to scan.</p>
+                        </div>
+                      )}
+
+                       {instances.map(([idx, params]) => {
                           const ssid = params['SSID'] || params['SSID.SSID'] || '';
                           const pwdKey = Object.keys(params).find(k => k.toLowerCase().includes('keypassphrase') || k.toLowerCase().includes('presharedkey'));
                           const password = pwdKey ? params[pwdKey] : '';
@@ -1202,6 +1260,30 @@ export default function Devices() {
                                  {wifiSaveMsg}
                                </div>
                              )}
+                           </div>
+                         );
+                       })}
+
+                       {hasDiscoveredWifi && (
+                         <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                           <div className="flex items-center justify-between mb-2">
+                             <div className="text-sm font-bold text-slate-900 dark:text-white">Raw Discovered WiFi Params</div>
+                             <div className="text-[10px] text-slate-400 font-mono">Debug Info</div>
+                           </div>
+                           <div className="max-h-40 overflow-y-auto space-y-0.5 font-mono text-[10px]">
+                             {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => (
+                               <p key={key} className="text-slate-500 break-all">
+                                 <span className="text-primary">{key}</span> = <span className="text-slate-700 dark:text-slate-300">{String(val)}</span>
+                               </p>
+                             ))}
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })()}
+              </section>
+            )}
                            </div>
                          );
                        })}
