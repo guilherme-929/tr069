@@ -1181,7 +1181,16 @@ export class CwmpService {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');
 
-    const params = (device.parameters as Record<string, string>) || {};
+    const params = (device.parameters as Record<string, any>) || {};
+
+    const str = (v: any): string => {
+      if (typeof v === 'string') return v;
+      if (v && typeof v === 'object') {
+        // CPE XML values often arrive as {@xsi:type: "xsd:string", $: "actual-value"}
+        return (v as any).$ || (v as any)._value || (v as any).value || String(v);
+      }
+      return '';
+    };
 
     const connectedDevices: any[] = [];
 
@@ -1190,32 +1199,27 @@ export class CwmpService {
       let devIndex = 1;
       while (true) {
         const basePath = `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${wlan}.AssociatedDevice.${devIndex}`;
-        const mac = params[`${basePath}.AssociatedDeviceMACAddress`];
+        const mac = str(params[`${basePath}.AssociatedDeviceMACAddress`]);
         if (!mac) break;
-
-        const rawName = params[`${basePath}.X_ZTE-COM_AssociatedDeviceName`];
-        const name = rawName && typeof rawName === 'object'
-          ? (rawName as any)._value || (rawName as any).value || rawName.toString().replace(/^\{?@_xsi:type[^}]*\}?$/, '').trim()
-          : typeof rawName === 'string' ? rawName : '';
 
         connectedDevices.push({
           wlan,
           mac,
-          name,
-          ip: params[`${basePath}.AssociatedDeviceIPAddress`] || '',
-          rssi: parseInt(params[`${basePath}.AssociatedDeviceRssi`] || '0'),
-          snr: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_SNR`] || '0'),
-          noise: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_Noise`] || '0'),
-          bandwidth: params[`${basePath}.AssociatedDeviceBandWidth`] || '',
-          txRate: parseInt(params[`${basePath}.X_ZTE-COM_TXRate`] || '0'),
-          rxRate: parseInt(params[`${basePath}.X_ZTE-COM_RXRate`] || '0'),
-          bytesReceived: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_BytesReceived`] || '0'),
-          bytesSend: parseInt(params[`${basePath}.X_ZTE-COM_WLAN_BytesSend`] || '0'),
-          stayTime: params[`${basePath}.X_ZTE-COM_StayTime`] || '0',
-          radio: params[`${basePath}.X_ZTE-COM_WLAN_Radio`] || '',
-          clientMode: params[`${basePath}.X_ZTE-COM_WLAN_ClientMode`] || '',
-          clientChannelWidth: params[`${basePath}.X_ZTE-COM_WLAN_ClientChannelWidth`] || '',
-          signalStrength: parseInt(params[`${basePath}.X_ZTE-COM_SignalStrength`] || '0'),
+          name: str(params[`${basePath}.X_ZTE-COM_AssociatedDeviceName`]),
+          ip: str(params[`${basePath}.AssociatedDeviceIPAddress`]),
+          rssi: parseInt(str(params[`${basePath}.AssociatedDeviceRssi`])) || 0,
+          snr: parseInt(str(params[`${basePath}.X_ZTE-COM_WLAN_SNR`])) || 0,
+          noise: parseInt(str(params[`${basePath}.X_ZTE-COM_WLAN_Noise`])) || 0,
+          bandwidth: str(params[`${basePath}.AssociatedDeviceBandWidth`]),
+          txRate: parseInt(str(params[`${basePath}.X_ZTE-COM_TXRate`])) || 0,
+          rxRate: parseInt(str(params[`${basePath}.X_ZTE-COM_RXRate`])) || 0,
+          bytesReceived: parseInt(str(params[`${basePath}.X_ZTE-COM_WLAN_BytesReceived`])) || 0,
+          bytesSend: parseInt(str(params[`${basePath}.X_ZTE-COM_WLAN_BytesSend`])) || 0,
+          stayTime: str(params[`${basePath}.X_ZTE-COM_StayTime`]),
+          radio: str(params[`${basePath}.X_ZTE-COM_WLAN_Radio`]),
+          clientMode: str(params[`${basePath}.X_ZTE-COM_WLAN_ClientMode`]),
+          clientChannelWidth: str(params[`${basePath}.X_ZTE-COM_WLAN_ClientChannelWidth`]),
+          signalStrength: parseInt(str(params[`${basePath}.X_ZTE-COM_SignalStrength`])) || 0,
         });
         devIndex++;
       }

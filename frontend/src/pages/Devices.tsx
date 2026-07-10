@@ -1265,7 +1265,7 @@ export default function Devices() {
                            </div>
                          );
                        })}
-
+ 
                        {hasDiscoveredWifi && (
                          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                            <div className="flex items-center justify-between mb-2">
@@ -1284,51 +1284,16 @@ export default function Devices() {
                      </div>
                    );
                  })()}
-              </section>
-            )}
-                           </div>
-                         );
-                       })}
+               </section>
+              )}
 
-                       {hasDiscoveredWifi && (
-                         <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                           <div className="flex items-center justify-between mb-2">
-                             <div className="text-sm font-bold text-slate-900 dark:text-white">Raw Discovered WiFi Params</div>
-                             <div className="text-[10px] text-slate-400 font-mono">Debug Info</div>
-                           </div>
-                           <div className="max-h-40 overflow-y-auto space-y-0.5 font-mono text-[10px]">
-                             {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => (
-                               <p key={key} className="text-slate-500 break-all">
-                                 <span className="text-primary">{key}</span> = <span className="text-slate-700 dark:text-slate-300">{String(val)}</span>
-                               </p>
-                             ))}
-                           </div>
-                         </div>
-                       )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                      </div>
+                    );
+                  })()}
+               </section>
+             )}
 
-                      {hasDiscoveredWifi && (
-                        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                          <div className="text-sm font-bold text-slate-900 dark:text-white mb-2">Raw Discovered WiFi Params</div>
-                          <div className="max-h-40 overflow-y-auto space-y-0.5 font-mono text-[10px]">
-                            {Object.entries(discoveryStatus.wifiParams as Record<string, string>).map(([key, val]) => (
-                              <p key={key} className="text-slate-500 break-all">
-                                <span className="text-primary">{key}</span> = <span className="text-slate-700 dark:text-slate-300">{String(val)}</span>
-                              </p>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </section>
-            )}
-
-            {activeTab === 'Descoberta' && (
+             {activeTab === 'Descoberta' && (
               <section>
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Parameter Discovery</h4>
@@ -1455,20 +1420,20 @@ export default function Devices() {
                       </thead>
                       <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                         {connectedDevices.map((client: any, i: number) => (
-                          <tr key={client.mac || i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                            <td className="px-2 py-2 text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[120px]">{client.name || client.hostname || '-'}</td>
-                            <td className="px-2 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white">{client.mac || client.MACAddress || '-'}</td>
+                          <tr key={String(client.mac || i)} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="px-2 py-2 text-xs font-semibold text-slate-900 dark:text-white truncate max-w-[120px]">{String(client.name || client.hostname || '-')}</td>
+                            <td className="px-2 py-2 text-xs font-mono font-bold text-slate-900 dark:text-white">{String(client.mac || client.MACAddress || '-')}</td>
                             <td className="px-2 py-2">
                               <div className="flex items-center gap-1.5">
-                                {client.rssi || client.RSSI ? <Signal size={12} className={Number(client.rssi || client.RSSI) > -60 ? 'text-success' : Number(client.rssi || client.RSSI) > -75 ? 'text-warning' : 'text-danger'} /> : null}
-                                <span className="text-xs font-mono text-slate-600 dark:text-slate-400">{client.rssi || client.RSSI || '-'}</span>
+                                {!!(client.rssi || client.RSSI) ? <Signal size={12} className={Number(client.rssi || client.RSSI) > -60 ? 'text-success' : Number(client.rssi || client.RSSI) > -75 ? 'text-warning' : 'text-danger'} /> : null}
+                                <span className="text-xs font-mono text-slate-600 dark:text-slate-400">{String(client.rssi || client.RSSI || '-')}</span>
                               </div>
                             </td>
-                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.snr || client.SNR || '-'}</td>
-                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.txRate || client.TXRate || '-'}</td>
-                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.rxRate || client.RXRate || '-'}</td>
-                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{client.ip || client.IPAddress || '-'}</td>
-                            <td className="px-2 py-2 text-xs text-slate-400">{client.lastSeen || client.LastSeen || '-'}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{String(client.snr || client.SNR || '-')}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{String(client.txRate || client.TXRate || '-')}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{String(client.rxRate || client.RXRate || '-')}</td>
+                            <td className="px-2 py-2 text-xs font-mono text-slate-500">{String(client.ip || client.IPAddress || '-')}</td>
+                            <td className="px-2 py-2 text-xs text-slate-400">{String(client.lastSeen || client.LastSeen || '-')}</td>
                           </tr>
                         ))}
                       </tbody>
