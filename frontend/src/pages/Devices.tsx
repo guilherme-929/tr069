@@ -286,7 +286,7 @@ export default function Devices() {
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-600">&times;</button>
             </div>
             <div className="flex flex-col gap-2">
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <button
                   onClick={() => doAction('reboot', selected.id)}
                   disabled={actionLoading === 'reboot'}
@@ -307,20 +307,6 @@ export default function Devices() {
                   className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-40"
                 >
                   <Download size={13} /> {actionLoading === 'update' ? '...' : 'Atualizar'}
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const { data } = await api.post(`/devices/${selected.id}/connection-request`);
-                      alert(data.message);
-                    } catch (err: any) {
-                      alert(err.response?.data?.message || 'Connection request failed');
-                    }
-                  }}
-                  disabled={!selected.connectionRequestUrl}
-                  className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold border border-primary/30 text-primary hover:bg-primary/5 transition-colors disabled:opacity-40"
-                >
-                  <ExternalLink size={13} /> CR
                 </button>
                 <button
                   onClick={() => doAction('reset', selected.id)}
@@ -391,14 +377,14 @@ export default function Devices() {
             </div>
           </div>
 
-          <div className="flex border-b border-slate-100 dark:border-slate-800 px-4">
+          <div className="flex overflow-x-auto border-b border-slate-100 dark:border-slate-800 px-2">
             {tabs.map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-3 text-[11px] font-bold uppercase border-b-2 transition-colors ${
-                  tab === activeTab ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'
-                }`}
+className={`px-2.5 py-3 whitespace-nowrap text-[11px] font-bold uppercase border-b-2 transition-colors ${
+                   tab === activeTab ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'
+                 }`}
               >
                 {tab}
               </button>
