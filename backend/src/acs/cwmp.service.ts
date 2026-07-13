@@ -143,6 +143,24 @@ export class CwmpService {
                 tenantId: device.tenantId,
               },
             });
+
+            // If Fault 9814 (parse error), cancel all remaining PENDING tasks
+            // of the same type to break the provisioning loop.
+            // The XML generated is likely malformed for this CPE model, so
+            // retrying will only keep failing and accumulating tasks.
+            const isFault9814 = faultDetail.includes('9814') || faultDetail.includes('Parse xml');
+            if (isFault9814) {
+              const faultedTypes = [...new Set(failedTasks.map(t => t.type))];
+              for (const ft of faultedTypes) {
+                const cancelled = await this.prisma.task.updateMany({
+                  where: { deviceId: device.id, status: 'PENDING', type: ft },
+                  data: { status: 'CANCELLED', error: `Cancelled due to Fault 9814 on type ${ft}` },
+                });
+                if (cancelled.count > 0) {
+                  this.logger.warn(`[FAULT-9814] Cancelled ${cancelled.count} pending ${ft} tasks for ${device.serial}`);
+                }
+              }
+            }
           }
         }
         return this.buildEmptySoapEnvelope();
@@ -725,17 +743,27 @@ export class CwmpService {
         data: { parameters: { ...allParams, __discovered__: discovered } as any },
       });
 
-      // Queue GetParameterValues for these params - use refreshObject approach
-      // for large sets, but for now do batched GetParameterValues
-      await this.prisma.task.create({
-        data: {
-          deviceId: device.id,
-          type: 'GetParameterValues',
-          status: 'PENDING',
-          payload: { names: leafParams },
-          tenantId: device.tenantId,
-        },
-      });
+      // Chunk into small batches to avoid Fault 9814 on strict CPEs (TP-Link etc.)
+      const GPV_CHUNK_SIZE = 10;
+      for (let i = 0; i < leafParams.length; i += GPV_CHUNK_SIZE) {
+        const chunk = leafParams.slice(i, i + GPV_CHUNK_SIZE);
+        const existingPending = await this.prisma.task.count({
+          where: { deviceId: device.id, type: 'GetParameterValues', status: 'PENDING' },
+        });
+        if (existingPending >= 50) {
+          this.logger.warn(`[DISCOVERY] Too many pending GPV tasks (${existingPending}) for ${device.serial}, skipping chunk`);
+          break;
+        }
+        await this.prisma.task.create({
+          data: {
+            deviceId: device.id,
+            type: 'GetParameterValues',
+            status: 'PENDING',
+            payload: { names: chunk },
+            tenantId: device.tenantId,
+          },
+        });
+      }
     } else {
       // No new leaf params, just update discovered structure
       await this.prisma.device.update({
@@ -1633,7 +1661,10 @@ export class CwmpService {
         const names = payload?.names || ['Device.DeviceInfo.*'];
         const gpvXml = wrap(this.builder.build(
           this.buildSoapResponse('GetParameterValues', {
-            ParameterNames: { string: names },
+            ParameterNames: {
+              '@_soap-enc:arrayType': `xsd:string[${names.length}]`,
+              string: names,
+            },
           }),
         ));
         this.logger.log(`[GPV-SEND] task=${task.id} count=${names.length} first=${names[0]} last=${names[names.length-1]}`);
@@ -1646,10 +1677,16 @@ export class CwmpService {
           ? Object.entries(payload.parameters as Record<string, string>).map(([name, value]) => ({ name, value }))
           : (payload?.params || []);
         if (params.length === 0) return this.buildEmptySoapEnvelope();
+        const maxSpvBatch = 10;
+        const batch = params.slice(0, maxSpvBatch);
+        if (params.length > maxSpvBatch) {
+          this.logger.warn(`[SPV] Truncating SetParameterValues from ${params.length} to ${maxSpvBatch} params to avoid Fault 9814`);
+        }
         return wrap(this.builder.build(
           this.buildSoapResponse('SetParameterValues', {
             ParameterList: {
-              ParameterValueStruct: params.map((p: any) => ({
+              '@_soap-enc:arrayType': `cwmp:ParameterValueStruct[${batch.length}]`,
+              ParameterValueStruct: batch.map((p: any) => ({
                 Name: p.name,
                 Value: { '#text': p.value, '@_xsi:type': 'xsd:string' },
               })),
@@ -1784,6 +1821,7 @@ export class CwmpService {
         '@_xmlns:cwmp': 'urn:dslforum-org:cwmp-1-0',
         '@_xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
         '@_xmlns:xsd': 'http://www.w3.org/2001/XMLSchema',
+        '@_xmlns:soap-enc': 'http://schemas.xmlsoap.org/soap/encoding/',
         '@_soap:encodingStyle': 'http://schemas.xmlsoap.org/soap/encoding/',
         'soap:Header': {
           'cwmp:ID': { '@_soap:mustUnderstand': '1', '#text': Date.now().toString() },
