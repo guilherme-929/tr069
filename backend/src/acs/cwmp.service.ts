@@ -400,15 +400,14 @@ export class CwmpService {
       where: { deviceId: device.id, status: { in: ['PENDING', 'IN_PROGRESS'] }, type: 'Provision' },
     });
 
-    // Detect rapid reconnect loop: >8 Informs in last 5 minutes → skip provisioning
-    const recentInforms = await this.prisma.event.count({
+    // Detect rapid reconnect loop: >8 events in last 5 minutes → skip provisioning
+    const recentEvents = await this.prisma.event.count({
       where: {
         deviceId: device.id,
-        code: { contains: 'INFORM' },
         createdAt: { gte: new Date(Date.now() - 300000) },
       },
     });
-    const isRapidReconnect = !isNewDevice && recentInforms > 8;
+    const isRapidReconnect = !isNewDevice && recentEvents > 8;
 
     if (needsProvision && existingProvTask === 0 && !isRapidReconnect) {
       const acsUrl = device.acsPublicUrlOverride
@@ -458,7 +457,7 @@ export class CwmpService {
         },
       });
     } else if (isRapidReconnect) {
-      this.logger.warn(`[RAPID-RECONNECT] Device ${serial} skipped provisioning — ${recentInforms} Informs in last 5min`);
+      this.logger.warn(`[RAPID-RECONNECT] Device ${serial} skipped provisioning — ${recentEvents} events in last 5min`);
       // Create alert on first detection of rapid reconnect loop
       const existingAlert = await this.prisma.alert.findFirst({
         where: {
@@ -474,7 +473,7 @@ export class CwmpService {
             type: 'ACS_SESSION_LOST',
             severity: 'WARNING',
             title: `Rapid reconnect: ${serial}`,
-            message: `Rapid reconnect loop detected: ${recentInforms} Informs in 5min`,
+            message: `Rapid reconnect loop detected: ${recentEvents} events in 5min`,
             tenantId: device.tenantId,
           },
         });
