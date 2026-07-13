@@ -9,6 +9,15 @@ build/
 coverage/
 .turbo/
 .next/
+.agents/*
 .agent/*
+
+# Chaves SSH e arquivos sensíveis
+key
+ssh_key
+temp_key
+temp_key_copy
+*.pem
+*.key
 *.png
 test_login.py
