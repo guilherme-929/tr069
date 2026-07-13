@@ -118,13 +118,30 @@ export class CwmpService {
       }
 
       if (body['SOAP-ENV:Fault'] || body['soap:Fault'] || body['Fault']) {
-        this.logger.warn(`CPE returned Fault: ${JSON.stringify(body['SOAP-ENV:Fault'] || body['soap:Fault'] || body['Fault']).slice(0, 200)}`);
+        const faultDetail = JSON.stringify(body['SOAP-ENV:Fault'] || body['soap:Fault'] || body['Fault']).slice(0, 500);
+        this.logger.warn(`CPE returned Fault: ${faultDetail}`);
         if (this.lastSerial) {
           const device = await this.prisma.device.findUnique({ where: { serial: this.lastSerial } });
           if (device) {
+            const failedTasks = await this.prisma.task.findMany({
+              where: { deviceId: device.id, status: 'IN_PROGRESS' },
+              select: { id: true, type: true, payload: true },
+            });
+            for (const ft of failedTasks) {
+              this.logger.warn(`[FAULT-DETAIL] Device=${device.serial} Task=${ft.id} Type=${ft.type} Payload=${JSON.stringify(ft.payload).slice(0, 300)}`);
+            }
             await this.prisma.task.updateMany({
               where: { deviceId: device.id, status: 'IN_PROGRESS' },
-              data: { status: 'FAILED', error: 'CPE returned SOAP Fault' },
+              data: { status: 'FAILED', error: `CPE returned SOAP Fault: ${faultDetail.slice(0, 200)}` },
+            });
+            await this.prisma.event.create({
+              data: {
+                deviceId: device.id,
+                code: 'SOAP_FAULT',
+                message: `CPE returned Fault: ${faultDetail.slice(0, 200)}`,
+                data: { fault: faultDetail, failedTasks: failedTasks.map(t => ({ id: t.id, type: t.type })) } as any,
+                tenantId: device.tenantId,
+              },
             });
           }
         }
@@ -377,12 +394,23 @@ export class CwmpService {
     // Auto-provisioning: apply model defaults + fix ACS URL on first boot
     const isNewDevice = !device?.createdAt || (Date.now() - new Date(device.createdAt).getTime() < 120000);
     const provisionedAt = (device?.parameters as any)?.__provisionedAt__;
-    const needsProvision = !provisionedAt || isNewDevice;
+    const provisionedElapsed = provisionedAt ? Date.now() - new Date(provisionedAt).getTime() : Infinity;
+    const needsProvision = (!provisionedAt || isNewDevice) && provisionedElapsed > 3600000;
     const existingProvTask = await this.prisma.task.count({
       where: { deviceId: device.id, status: { in: ['PENDING', 'IN_PROGRESS'] }, type: 'Provision' },
     });
 
-    if (needsProvision && existingProvTask === 0) {
+    // Detect rapid reconnect loop: >8 Informs in last 5 minutes → skip provisioning
+    const recentInforms = await this.prisma.event.count({
+      where: {
+        deviceId: device.id,
+        code: { contains: 'INFORM' },
+        createdAt: { gte: new Date(Date.now() - 300000) },
+      },
+    });
+    const isRapidReconnect = !isNewDevice && recentInforms > 8;
+
+    if (needsProvision && existingProvTask === 0 && !isRapidReconnect) {
       const acsUrl = device.acsPublicUrlOverride
         || process.env.ACS_PUBLIC_URL
         || `http://${ipAddress || 'localhost'}:${process.env.ACS_PORT || '7547'}`;
@@ -429,20 +457,47 @@ export class CwmpService {
           parameters: { ...currentParams, __provisionedAt__: new Date().toISOString() } as any,
         },
       });
+    } else if (isRapidReconnect) {
+      this.logger.warn(`[RAPID-RECONNECT] Device ${serial} skipped provisioning — ${recentInforms} Informs in last 5min`);
+      // Create alert on first detection of rapid reconnect loop
+      const existingAlert = await this.prisma.alert.findFirst({
+        where: {
+          deviceId: device.id,
+          type: 'ACS_SESSION_LOST',
+          resolved: false,
+        },
+      });
+      if (!existingAlert) {
+        await this.prisma.alert.create({
+          data: {
+            deviceId: device.id,
+            type: 'ACS_SESSION_LOST',
+            severity: 'WARNING',
+            title: `Rapid reconnect: ${serial}`,
+            message: `Rapid reconnect loop detected: ${recentInforms} Informs in 5min`,
+            tenantId: device.tenantId,
+          },
+        });
+      }
     }
 
-    // Auto-discover parameters on first boot or when discovery is empty
-    // This maps the device's actual data model so GetParameterValues can use
-    // discovered paths instead of hardcoded ones that may not exist on the CPE.
+    // Auto-discover parameters on first boot or when discovery is empty.
+    // Also trigger on periodic inform if device is more than 2 min old and
+    // still has no discovered parameters (handles CPEs that connect via
+    // periodic Inform instead of BOOT — e.g. ZTE behind CGNAT).
     const params = (device.parameters as Record<string, any>) || {};
     const discovered = params.__discovered__ || {};
     const hasDiscovery = (discovered._leaves?.length || 0) > 0;
-    if (!hasDiscovery && eventCodeStr.includes('BOOT')) {
+    const deviceAge = device.createdAt ? Date.now() - new Date(device.createdAt).getTime() : Infinity;
+    const shouldDiscover = !hasDiscovery && (
+      eventCodeStr.includes('BOOT') || deviceAge > 120000
+    );
+    if (shouldDiscover) {
       const existingDiscTask = await this.prisma.task.count({
         where: { deviceId: device.id, type: 'GetParameterNames', status: { in: ['PENDING', 'IN_PROGRESS'] } },
       });
       if (existingDiscTask === 0) {
-        this.logger.log(`[DISCOVERY] Auto-starting parameter discovery for ${serial}`);
+        this.logger.log(`[DISCOVERY] Auto-starting parameter discovery for ${serial} (hasParams=${hasDiscovery}, age=${Math.round(deviceAge/1000)}s)`);
         const currentParams = (device.parameters as Record<string, any>) || {};
         await this.prisma.device.update({
           where: { id: device.id },
@@ -1031,6 +1086,20 @@ export class CwmpService {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');
 
+    // Rate limit: max 20 pending tasks per device to avoid queue overload
+    const pendingTaskCount = await this.prisma.task.count({
+      where: { deviceId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+    });
+    if (pendingTaskCount >= 20) {
+      this.logger.warn(`[WIFI] Rate limit hit for ${device.serial} — ${pendingTaskCount} tasks already pending`);
+      return {
+        tasks: [],
+        instances: 0,
+        message: `Device already has ${pendingTaskCount} pending tasks. Try again later.`,
+        source: 'rate_limited',
+      };
+    }
+
     const params = (device.parameters as Record<string, string>) || {};
 
     // Determine which WiFi instances this CPE actually exposes.
@@ -1135,13 +1204,23 @@ export class CwmpService {
           );
         }
       }
-      if (useTR181) {
+      if (useTR181 && i <= 4) {
         essentialPathsByInstance[i].push(
           `Device.WiFi.SSID.${i}.SSID`,
           `Device.WiFi.SSID.${i}.Enable`,
           `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
+          `Device.WiFi.AccessPoint.${i}.AssociatedDeviceNumberOfEntries`,
         );
+      } else if (useTR181 && i > 4) {
+        // Skip additional instances to avoid oversized GetParameterValues.
+        // TP-Link XX530v exposes 16 SSIDs but we only need the main ones.
+        this.logger.debug(`[WIFI] Skipping TR-181 instance ${i} — only reading 1-4`);
       }
+    }
+
+    // For TR-181 with many instances, limit to the first 4 to avoid oversized requests
+    if (useTR181 && instances.length > 4) {
+      this.logger.log(`[WIFI] Limiting TR-181 instances from ${instances.length} to 4 for device ${device.serial}`);
     }
 
     // Check cache completeness using only essential paths (SSID, KeyPassphrase,
@@ -1195,8 +1274,16 @@ export class CwmpService {
 
     // Queue tasks per-instance to avoid one faulty instance killing the whole
     // request. Essential params first, then vendor-specific, then hosts.
+    // Max 25 param names per task to avoid oversized XML (prevents Fault 9814).
+    const MAX_PARAMS_PER_TASK = 25;
     const createdTasks: any[] = [];
     let taskCount = 0;
+
+    const chunkArray = <T>(arr: T[], size: number): T[][] => {
+      const result: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) result.push(arr.slice(i, i + size));
+      return result;
+    };
 
     for (const instance of instances) {
       const essential = essentialPathsByInstance[instance] || [];
@@ -1207,30 +1294,13 @@ export class CwmpService {
       const hasAllEssential = essential.every((p) => params[p] !== undefined && params[p] !== '');
 
       if (essential.length > 0 && !hasAllEssential && taskCount < 10) {
-        const task = await this.prisma.task.create({
-          data: {
-            deviceId,
-            type: 'GetParameterValues',
-            status: 'PENDING',
-            payload: { names: essential },
-            tenantId: device.tenantId,
-          },
-        });
-        createdTasks.push(task);
-        taskCount++;
-      }
-
-      // Vendor-specific paths in separate tasks (these are the most likely
-      // to cause SOAP Faults on CPEs with limited firmware support).
-      if (vendor.length > 0 && taskCount < 15) {
-        const vendorParamsAlreadyCached = vendor.every((p) => params[p] !== undefined && params[p] !== '');
-        if (!vendorParamsAlreadyCached) {
+        for (const chunk of chunkArray(essential, MAX_PARAMS_PER_TASK)) {
           const task = await this.prisma.task.create({
             data: {
               deviceId,
               type: 'GetParameterValues',
               status: 'PENDING',
-              payload: { names: vendor },
+              payload: { names: chunk },
               tenantId: device.tenantId,
             },
           });
@@ -1239,19 +1309,42 @@ export class CwmpService {
         }
       }
 
+      // Vendor-specific paths in separate tasks (these are the most likely
+      // to cause SOAP Faults on CPEs with limited firmware support).
+      if (vendor.length > 0 && taskCount < 15) {
+        const vendorParamsAlreadyCached = vendor.every((p) => params[p] !== undefined && params[p] !== '');
+        if (!vendorParamsAlreadyCached) {
+          for (const chunk of chunkArray(vendor, MAX_PARAMS_PER_TASK)) {
+            const task = await this.prisma.task.create({
+              data: {
+                deviceId,
+                type: 'GetParameterValues',
+                status: 'PENDING',
+                payload: { names: chunk },
+                tenantId: device.tenantId,
+              },
+            });
+            createdTasks.push(task);
+            taskCount++;
+          }
+        }
+      }
+
       // Associated hosts in separate tasks
       if (hosts.length > 0 && taskCount < 20) {
-        const hostTask = await this.prisma.task.create({
-          data: {
-            deviceId,
-            type: 'GetParameterValues',
-            status: 'PENDING',
-            payload: { names: hosts },
-            tenantId: device.tenantId,
-          },
-        });
-        createdTasks.push(hostTask);
-        taskCount++;
+        for (const chunk of chunkArray(hosts, MAX_PARAMS_PER_TASK)) {
+          const hostTask = await this.prisma.task.create({
+            data: {
+              deviceId,
+              type: 'GetParameterValues',
+              status: 'PENDING',
+              payload: { names: chunk },
+              tenantId: device.tenantId,
+            },
+          });
+          createdTasks.push(hostTask);
+          taskCount++;
+        }
       }
     }
 
@@ -1309,7 +1402,15 @@ export class CwmpService {
 
     const connectedDevices: any[] = [];
 
-    // Para cada WLANConfiguration (1-8)
+    // Detect namespace from cached params to determine where to look
+    const hasWLAN = Object.keys(params).some((k) =>
+      k.startsWith('InternetGatewayDevice.LANDevice.1.WLANConfiguration.'),
+    );
+    const hasTR181_AP = Object.keys(params).some((k) =>
+      k.startsWith('Device.WiFi.AccessPoint.'),
+    );
+
+    // Para cada WLANConfiguration (TR-098) — até 8 instâncias
     for (let wlan = 1; wlan <= 8; wlan++) {
       let devIndex = 1;
       while (true) {
@@ -1318,7 +1419,7 @@ export class CwmpService {
         if (!mac) break;
 
         connectedDevices.push({
-          wlan,
+          interface: `WLAN.${wlan}`,
           mac,
           name: str(params[`${basePath}.X_ZTE-COM_AssociatedDeviceName`]),
           ip: str(params[`${basePath}.AssociatedDeviceIPAddress`]),
@@ -1335,6 +1436,37 @@ export class CwmpService {
           clientMode: str(params[`${basePath}.X_ZTE-COM_WLAN_ClientMode`]),
           clientChannelWidth: str(params[`${basePath}.X_ZTE-COM_WLAN_ClientChannelWidth`]),
           signalStrength: parseInt(str(params[`${basePath}.X_ZTE-COM_SignalStrength`])) || 0,
+        });
+        devIndex++;
+      }
+    }
+
+    // Para cada AccessPoint (TR-181) — até 16 instâncias (TP-Link XX530v etc.)
+    for (let ap = 1; ap <= 16; ap++) {
+      let devIndex = 1;
+      while (true) {
+        const basePath = `Device.WiFi.AccessPoint.${ap}.AssociatedDevice.${devIndex}`;
+        const mac = str(params[`${basePath}.AssociatedDeviceMACAddress`]);
+        if (!mac) break;
+
+        connectedDevices.push({
+          interface: `AP.${ap}`,
+          mac,
+          name: str(params[`${basePath}.X_TP_HostName`]) || str(params[`${basePath}.X_ZTE-COM_AssociatedDeviceName`]),
+          ip: str(params[`${basePath}.AssociatedDeviceIPAddress`]),
+          rssi: parseInt(str(params[`${basePath}.AssociatedDeviceRSSI`]) || str(params[`${basePath}.AssociatedDeviceRssi`])) || 0,
+          snr: 0,
+          noise: 0,
+          bandwidth: str(params[`${basePath}.AssociatedDeviceBandwidth`] || params[`${basePath}.AssociatedDeviceBandWidth`]),
+          txRate: parseInt(str(params[`${basePath}.X_TP_TXRate`] || params[`${basePath}.X_TP_TxRate`] || params[`${basePath}.X_ZTE-COM_TXRate`])) || 0,
+          rxRate: parseInt(str(params[`${basePath}.X_TP_RXRate`] || params[`${basePath}.X_TP_RxRate`] || params[`${basePath}.X_ZTE-COM_RXRate`])) || 0,
+          bytesReceived: 0,
+          bytesSend: 0,
+          stayTime: str(params[`${basePath}.AssociatedDeviceLastDataTransmitTime`] || params[`${basePath}.X_ZTE-COM_StayTime`]),
+          radio: str(params[`${basePath}.AssociatedDeviceOperatingFrequencyBand`]),
+          clientMode: '',
+          clientChannelWidth: '',
+          signalStrength: 0,
         });
         devIndex++;
       }
@@ -1500,12 +1632,13 @@ export class CwmpService {
       case 'GetParameterValues': {
         const payload = task.payload as any;
         const names = payload?.names || ['Device.DeviceInfo.*'];
-        this.logger.log(`[GPV-SEND] task=${task.id} names=${JSON.stringify(names).slice(0,300)}`);
-        return wrap(this.builder.build(
+        const gpvXml = wrap(this.builder.build(
           this.buildSoapResponse('GetParameterValues', {
             ParameterNames: { string: names },
           }),
         ));
+        this.logger.log(`[GPV-SEND] task=${task.id} count=${names.length} first=${names[0]} last=${names[names.length-1]}`);
+        return gpvXml;
       }
       case 'SetParameterValues':
       case 'Provision': {
