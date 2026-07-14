@@ -78,11 +78,15 @@ export class ConfigService {
       { key: 'device.default.periodicInformEnable', value: 'true', category: 'device', description: 'Enable periodic inform by default' },
 
       // Virtual Parameter definitions (GenieACS-style VirtualParameters.*)
+      // Paths include both TR-098 (WLANConfiguration) and TR-181 (Device.WiFi)
+      // for compatibility across vendors (ZTE, TP-Link, Huawei, etc.)
       { key: 'virtualparam.vWifi-2G', value: JSON.stringify({
         paths: [
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel',
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status',
+          'Device.WiFi.SSID.1.SSID',
+          'Device.WiFi.SSID.1.Enable',
         ],
         label: 'vWifi-2G',
         description: 'WiFi 2.4GHz summary (SSID | Ch: X | Status)',
@@ -98,6 +102,10 @@ export class ConfigService {
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel',
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Status',
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status',
+          'Device.WiFi.SSID.2.SSID',
+          'Device.WiFi.SSID.2.Enable',
+          'Device.WiFi.SSID.5.SSID',
+          'Device.WiFi.SSID.5.Enable',
         ],
         label: 'vWifi-5G',
         description: 'WiFi 5GHz summary (SSID | Ch: X | Status)',

@@ -1160,7 +1160,9 @@ export class CwmpService {
 
     // Detect namespace from both cached params AND discovered leaves.
     // This prevents wrong namespace detection when discovery is incomplete.
-    // Priority: WLANConfiguration (TR-098) > WIFI (ZTE-specific) > Wi-Fi (TR-181).
+    // TP-Link CPEs expose both TR-098 (WLANConfiguration) and TR-181
+    // (Device.WiFi.) namespaces but the actual WiFi is under TR-181.
+    // Priority: TR-181 > TR-098 > ZTE-specific.
     // Namespaces are MUTUALLY EXCLUSIVE — never query both in the same session.
     const allKnownKeys = [
       ...Object.keys(params),
@@ -1174,14 +1176,32 @@ export class CwmpService {
     const hasZTE = allKnownKeys.some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
+
+    // Detect TP-Link by manufacturer or X_TP_ vendor params
+    const isTPLink = (device.manufacturer || '').toLowerCase().includes('tp-link')
+      || allKnownKeys.some((k) => k.includes('X_TP_'));
+
+    // When both TR-181 and TR-098 are detected, count SSID instances to
+    // determine which namespace actually exposes the WiFi interfaces.
+    // TP-Link has 16 SSID instances under TR-181 vs ~2 under TR-098.
+    const tr181SSIDCount = leaves.filter((l) =>
+      l.startsWith('Device.WiFi.SSID.') && l.endsWith('.SSID')
+    ).length;
+    const tr098SSIDCount = leaves.filter((l) =>
+      l.startsWith('InternetGatewayDevice.LANDevice.1.WLANConfiguration.') && l.endsWith('.SSID')
+    ).length;
+    const prefersTR181 = isTPLink
+      || (hasTR181 && tr181SSIDCount > tr098SSIDCount)
+      || (hasTR181 && !hasWLAN);
+
     // When no WiFi namespace is detected from discovery/cache, fall back to
     // TR-181 Device.WiFi.* paths as the most common standard. This covers
     // CPEs like TP-Link that don't expose WiFi in GetParameterNames but may
     // still respond to GetParameterValues for standard data model paths.
     const noneDetected = !hasWLAN && !hasZTE && !hasTR181 && instances.length > 0;
-    const useWLAN = hasWLAN;
-    const useZTE = !hasWLAN && hasZTE;
-    const useTR181 = !hasWLAN && !hasZTE && (hasTR181 || noneDetected);
+    const useTR181 = prefersTR181 || noneDetected;
+    const useWLAN = hasWLAN && !useTR181;
+    const useZTE = !useWLAN && !useTR181 && hasZTE;
 
     // Build the essential paths per instance (standard CWMP params that all
     // TR-098 CPEs support). These are safe to query and rarely fault.
@@ -1625,23 +1645,23 @@ export class CwmpService {
     const wrap = (xml: string) => `<?xml version="1.0" encoding="UTF-8"?>\n${xml}`;
     switch (task.type) {
       case 'Reboot':
-        return wrap(this.builder.build(this.buildSoapResponse('Reboot', { CommandKey: task.id })));
+        return wrap(this.builder.build(this.buildSoapResponse('Reboot', { 'cwmp:CommandKey': task.id })));
       case 'FactoryReset':
-        return wrap(this.builder.build(this.buildSoapResponse('FactoryReset', { CommandKey: task.id })));
+        return wrap(this.builder.build(this.buildSoapResponse('FactoryReset', { 'cwmp:CommandKey': task.id })));
       case 'Download': {
         const payload = task.payload as any;
         return wrap(this.builder.build(
           this.buildSoapResponse('Download', {
-            CommandKey: task.id,
-            FileType: payload?.fileType || '1 Firmware Upgrade Image',
-            URL: payload?.url || '',
-            Username: '',
-            Password: '',
-            FileSize: 0,
-            TargetFileName: '',
-            DelaySeconds: 0,
-            SuccessURL: '',
-            FailureURL: '',
+            'cwmp:CommandKey': task.id,
+            'cwmp:FileType': payload?.fileType || '1 Firmware Upgrade Image',
+            'cwmp:URL': payload?.url || '',
+            'cwmp:Username': '',
+            'cwmp:Password': '',
+            'cwmp:FileSize': 0,
+            'cwmp:TargetFileName': '',
+            'cwmp:DelaySeconds': 0,
+            'cwmp:SuccessURL': '',
+            'cwmp:FailureURL': '',
           }),
         ));
       }
@@ -1651,8 +1671,8 @@ export class CwmpService {
         const nextLevel = payload?.nextLevel ?? true;
         return wrap(this.builder.build(
           this.buildSoapResponse('GetParameterNames', {
-            ParameterPath: paramPath,
-            NextLevel: nextLevel,
+            'cwmp:ParameterPath': paramPath,
+            'cwmp:NextLevel': nextLevel,
           }),
         ));
       }
@@ -1661,7 +1681,7 @@ export class CwmpService {
         const names = payload?.names || ['Device.DeviceInfo.*'];
         const gpvXml = wrap(this.builder.build(
           this.buildSoapResponse('GetParameterValues', {
-            ParameterNames: {
+            'cwmp:ParameterNames': {
               '@_soap-enc:arrayType': `xsd:string[${names.length}]`,
               string: names,
             },
@@ -1684,14 +1704,14 @@ export class CwmpService {
         }
         return wrap(this.builder.build(
           this.buildSoapResponse('SetParameterValues', {
-            ParameterList: {
+            'cwmp:ParameterList': {
               '@_soap-enc:arrayType': `cwmp:ParameterValueStruct[${batch.length}]`,
-              ParameterValueStruct: batch.map((p: any) => ({
-                Name: p.name,
-                Value: { '#text': p.value, '@_xsi:type': 'xsd:string' },
+              'cwmp:ParameterValueStruct': batch.map((p: any) => ({
+                'cwmp:Name': p.name,
+                'cwmp:Value': { '#text': p.value, '@_xsi:type': 'xsd:string' },
               })),
             },
-            ParameterKey: task.id,
+            'cwmp:ParameterKey': task.id,
           }),
         ));
       }
