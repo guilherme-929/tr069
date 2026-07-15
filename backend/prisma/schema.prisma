@@ -127,6 +127,8 @@ model Device {
   firmwareId      String?
   tags            String[]
   parameters      Json?
+  discoveredPaths Json?   // array de paths leaf confirmados via GetParameterNames
+  parameterMeta   Json?   // { "<path>": "ISO timestamp" } — última vez que o valor foi buscado
   connectionRequestUrl   String?
   connectionRequestUsername String?
   connectionRequestPassword String?
@@ -161,6 +163,7 @@ model DeviceModel {
   dataModel   String   @default("TR-181")
   description String?
   defaultParameters Json?
+  unsupportedParameters Json?  // array de paths que já retornaram Fault 9005 para este modelo
   defaultAcsUrl     String?
   provisioningScript String?
   homologationStatus HomologationStatus @default(PENDING_REVIEW)

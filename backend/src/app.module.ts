@@ -16,6 +16,8 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { QueueModule } from './queue/queue.module';
 import { ScriptsModule } from './scripts/scripts.module';
 import { SystemConfigModule } from './system-config/system-config.module';
+import { TasksModule } from './tasks/tasks.module';
+import { DiscoveryEngineModule } from './discovery-engine/discovery-engine.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { SystemConfigModule } from './system-config/system-config.module';
     QueueModule,
     ScriptsModule,
     SystemConfigModule,
+    TasksModule,
+    DiscoveryEngineModule,
   ],
   providers: [PrismaService],
   exports: [PrismaService],
