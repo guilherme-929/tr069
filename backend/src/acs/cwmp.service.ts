@@ -214,7 +214,7 @@ export class CwmpService {
     const paramList = Array.isArray(parameters) ? parameters : [parameters];
     for (const p of paramList) {
       if (p.Name) {
-        paramMap[p.Name] = p.Value?.['#text'] ?? p.Value ?? '';
+        paramMap[p.Name] = (p.Value && typeof p.Value === 'object' && !('#text' in p.Value)) ? '(hidden)' : (p.Value?.['#text'] ?? p.Value ?? '');
       }
     }
 
@@ -599,7 +599,7 @@ export class CwmpService {
     const paramMap: Record<string, string> = {};
     for (const p of params) {
       if (p.Name) {
-        paramMap[p.Name] = p.Value?.['#text'] ?? p.Value ?? '';
+        paramMap[p.Name] = (p.Value && typeof p.Value === 'object' && !('#text' in p.Value)) ? '(hidden)' : (p.Value?.['#text'] ?? p.Value ?? '');
       }
     }
 

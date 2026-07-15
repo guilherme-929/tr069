@@ -83,35 +83,25 @@ export class ConfigService {
       { key: 'virtualparam.vWifi-2G', value: JSON.stringify({
         paths: [
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
-          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Channel',
-          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Status',
           'Device.WiFi.SSID.1.SSID',
-          'Device.WiFi.SSID.1.Enable',
         ],
         label: 'vWifi-2G',
-        description: 'WiFi 2.4GHz summary (SSID | Ch: X | Status)',
-        transform: 'join',
-        separator: ' | ',
-      }), category: 'virtual', description: 'Virtual parameter: WiFi 2.4GHz summary' },
+        description: 'WiFi 2.4GHz SSID (TR-098 or TR-181)',
+        transform: 'first',
+      }), category: 'virtual', description: 'Virtual parameter: WiFi 2.4GHz SSID' },
 
       { key: 'virtualparam.vWifi-5G', value: JSON.stringify({
         paths: [
-          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID',
           'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID',
-          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Channel',
-          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Channel',
-          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Status',
-          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Status',
+          'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID',
+          'Device.WiFi.SSID.3.SSID',
           'Device.WiFi.SSID.2.SSID',
-          'Device.WiFi.SSID.2.Enable',
           'Device.WiFi.SSID.5.SSID',
-          'Device.WiFi.SSID.5.Enable',
         ],
         label: 'vWifi-5G',
-        description: 'WiFi 5GHz summary (SSID | Ch: X | Status)',
-        transform: 'join',
-        separator: ' | ',
-      }), category: 'virtual', description: 'Virtual parameter: WiFi 5GHz summary' },
+        description: 'WiFi 5GHz SSID (TR-098 instance 2/5 or TR-181 instance 2/3/5)',
+        transform: 'first',
+      }), category: 'virtual', description: 'Virtual parameter: WiFi 5GHz SSID' },
     ];
 
     for (const d of defaults) {
