@@ -27,13 +27,24 @@ export class DeviceInspectCommand extends CommandRunner {
     const params = (device.parameters as Record<string, string>) || {};
     const discovered = (device.discoveredPaths as string[]) || [];
 
+    const unsupported = (device.model?.unsupportedParameters as string[]) || [];
+
     console.log(`\n=== ${device.serial} (${device.manufacturer} ${device.modelName}) ===`);
-    console.log(`Status: ${device.status} | Último Inform: ${device.lastInform}`);
-    console.log(`Modelo cadastrado: ${device.model?.name ?? '(nenhum)'} | dataModel: ${device.model?.dataModel ?? '-'}`);
+    console.log(`Status: ${device.status} | Último Inform: ${device.lastContact}`);
+    console.log(`Modelo: ${device.model?.name ?? '(nenhum)'} | dataModel: ${device.model?.dataModel ?? '-'}`);
+    console.log(`Homologação: ${device.model?.homologationStatus ?? '-'}`);
     console.log(`Parâmetros em cache: ${Object.keys(params).length} | Paths descobertos: ${discovered.length}`);
+    console.log(`Unsupported paths: ${unsupported.length}`);
+    if (unsupported.length > 0) {
+      for (const p of unsupported.slice(0, 10)) {
+        console.log(`  ✗ ${p}`);
+      }
+      if (unsupported.length > 10) console.log(`  ... e mais ${unsupported.length - 10}`);
+    }
     console.log(`\n--- Últimas 10 tasks ---`);
     for (const t of device.tasks) {
-      console.log(`[${t.status}] ${t.type} (attempts ${t.attempts}/${t.maxAttempts}) — ${t.createdAt.toISOString()}`);
+      const err = t.error ? ` err=${t.error.slice(0, 60)}` : '';
+      console.log(`[${t.status}] ${t.type} (${t.attempts}/${t.maxAttempts})${err} — ${t.createdAt.toISOString()}`);
     }
   }
 }

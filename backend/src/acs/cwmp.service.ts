@@ -165,25 +165,33 @@ export class CwmpService {
             // If Fault 9005 (invalid parameter name), retry with split batches
             // to isolate the bad parameter. For GPV tasks, split names array
             // in half; for SPV/Provision tasks, split parameter keys.
+            // When isolated to a single parameter, persist as unsupported
+            // no DeviceModel — equivalente ao que o GenieACS faz ao nunca
+            // reconsultar um path que já se provou inválido para aquele modelo.
             const isFault9005 = faultDetail.includes('9005') || faultDetail.includes('Invalid parameter name');
             if (isFault9005) {
               for (const ft of failedTasks) {
                 const payload = (ft.payload || {}) as any;
-                if (ft.type === 'GetParameterValues' && Array.isArray(payload.names) && payload.names.length > 1) {
-                  const half = Math.ceil(payload.names.length / 2);
-                  const split1 = payload.names.slice(0, half);
-                  const split2 = payload.names.slice(half);
-                  this.logger.warn(`[FAULT-9005] Splitting GPV task ${ft.id}: ${payload.names.length} names -> ${split1.length} + ${split2.length}`);
-                  for (const chunk of [split1, split2]) {
-                    await this.prisma.task.create({
-                      data: {
-                        deviceId: device.id,
-                        type: 'GetParameterValues',
-                        status: 'PENDING',
-                        payload: { names: chunk },
-                        tenantId: device.tenantId,
-                      },
-                    });
+                if (ft.type === 'GetParameterValues' && Array.isArray(payload.names)) {
+                  if (payload.names.length > 1) {
+                    const half = Math.ceil(payload.names.length / 2);
+                    const split1 = payload.names.slice(0, half);
+                    const split2 = payload.names.slice(half);
+                    this.logger.warn(`[FAULT-9005] Splitting GPV task ${ft.id}: ${payload.names.length} names -> ${split1.length} + ${split2.length}`);
+                    for (const chunk of [split1, split2]) {
+                      await this.prisma.task.create({
+                        data: {
+                          deviceId: device.id,
+                          type: 'GetParameterValues',
+                          status: 'PENDING',
+                          payload: { names: chunk },
+                          tenantId: device.tenantId,
+                        },
+                      });
+                    }
+                  } else if (payload.names.length === 1) {
+                    // Path isolado como culpado — persiste como unsupported
+                    await this.markPathUnsupported(device.modelId, payload.names[0]);
                   }
                 }
                 if ((ft.type === 'SetParameterValues' || ft.type === 'Provision') && payload.parameters) {
@@ -206,6 +214,8 @@ export class CwmpService {
                         },
                       });
                     }
+                  } else if (paramKeys.length === 1) {
+                    await this.markPathUnsupported(device.modelId, paramKeys[0]);
                   }
                 }
               }
@@ -1175,6 +1185,13 @@ export class CwmpService {
     const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
     if (!device) throw new Error('Device not found');
 
+    // Carrega DeviceModel para filtrar paths que já falharam (Fault 9005 persistente)
+    const model = device.modelId
+      ? await this.prisma.deviceModel.findUnique({ where: { id: device.modelId } })
+      : null;
+    const unsupported = new Set((model?.unsupportedParameters as string[]) || []);
+    const filterUnsupported = (paths: string[]) => paths.filter((p) => !unsupported.has(p));
+
     // Rate limit: max 20 pending tasks per device to avoid queue overload
     const pendingTaskCount = await this.prisma.task.count({
       where: { deviceId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
@@ -1273,6 +1290,9 @@ export class CwmpService {
     // Associated device entries (MAC, IP, name).
     const hostPathsByInstance: Record<number, string[]> = {};
 
+    const isZTE = (device.manufacturer || '').toLowerCase().includes('zte')
+      || allKnownKeys.some((k) => k.includes('X_ZTE-COM_'));
+
     for (const i of instances) {
       essentialPathsByInstance[i] = [];
       vendorPathsByInstance[i] = [];
@@ -1301,15 +1321,25 @@ export class CwmpService {
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Standard`,
           `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`,
         );
-        vendorPathsByInstance[i].push(
-          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
-          `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
+        // Vendor-specific paths ONLY for ZTE — outros fabricantes retornam Fault 9005
+        if (isZTE) {
+          vendorPathsByInstance[i].push(
+            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`,
+            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_WLAN_SupportedFrequencyBands`,
+          );
+        }
+        // Limita o número de hosts ao TotalAssociations conhecido (se disponível)
+        // em vez de sempre pedir 16 — reduz dramaticamente Faults 9005
+        const knownTotal = parseInt(
+          params[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.TotalAssociations`] || '',
+          10,
         );
-        for (let c = 1; c <= 16; c++) {
+        const maxHosts = Number.isFinite(knownTotal) && knownTotal > 0 ? knownTotal : 4;
+        for (let c = 1; c <= maxHosts; c++) {
           hostPathsByInstance[i].push(
             `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.AssociatedDeviceMACAddress`,
             `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.AssociatedDeviceIPAddress`,
-            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.X_ZTE-COM_AssociatedDeviceName`,
+            ...(isZTE ? [`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.AssociatedDevice.${c}.X_ZTE-COM_AssociatedDeviceName`] : []),
           );
         }
       }
@@ -1395,9 +1425,10 @@ export class CwmpService {
     };
 
     for (const instance of instances) {
-      const essential = essentialPathsByInstance[instance] || [];
-      const vendor = vendorPathsByInstance[instance] || [];
-      const hosts = hostPathsByInstance[instance] || [];
+      // Filtra paths que já são conhecidos como unsupported para este modelo
+      const essential = filterUnsupported(essentialPathsByInstance[instance] || []);
+      const vendor = filterUnsupported(vendorPathsByInstance[instance] || []);
+      const hosts = filterUnsupported(hostPathsByInstance[instance] || []);
 
       // Only skip instance if ALL essential params are already cached
       const hasAllEssential = essential.every((p) => params[p] !== undefined && params[p] !== '');
@@ -1913,5 +1944,25 @@ export class CwmpService {
         },
       },
     };
+  }
+
+  /**
+   * Persiste um path como unsupported no DeviceModel para que nunca mais
+   * seja consultado para nenhum device daquele modelo.
+   * Equivalente funcional ao que o GenieACS faz ao ignorar parâmetros
+   * que retornaram Fault 9005.
+   */
+  private async markPathUnsupported(modelId: string | null, path: string): Promise<void> {
+    if (!modelId) return;
+    const model = await this.prisma.deviceModel.findUnique({ where: { id: modelId } });
+    if (!model) return;
+    const current = new Set((model.unsupportedParameters as string[]) || []);
+    if (current.has(path)) return;
+    current.add(path);
+    await this.prisma.deviceModel.update({
+      where: { id: modelId },
+      data: { unsupportedParameters: Array.from(current) },
+    });
+    this.logger.warn(`[FAULT-9005] Path "${path}" marcado como unsupported permanentemente no modelo ${model.name}`);
   }
 }
