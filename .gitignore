@@ -21,3 +21,5 @@ temp_key_copy
 *.key
 *.png
 test_login.py
+temp_deploy_key
+temp_deploy_key.pub

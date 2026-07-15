@@ -161,6 +161,55 @@ export class CwmpService {
                 }
               }
             }
+
+            // If Fault 9005 (invalid parameter name), retry with split batches
+            // to isolate the bad parameter. For GPV tasks, split names array
+            // in half; for SPV/Provision tasks, split parameter keys.
+            const isFault9005 = faultDetail.includes('9005') || faultDetail.includes('Invalid parameter name');
+            if (isFault9005) {
+              for (const ft of failedTasks) {
+                const payload = (ft.payload || {}) as any;
+                if (ft.type === 'GetParameterValues' && Array.isArray(payload.names) && payload.names.length > 1) {
+                  const half = Math.ceil(payload.names.length / 2);
+                  const split1 = payload.names.slice(0, half);
+                  const split2 = payload.names.slice(half);
+                  this.logger.warn(`[FAULT-9005] Splitting GPV task ${ft.id}: ${payload.names.length} names -> ${split1.length} + ${split2.length}`);
+                  for (const chunk of [split1, split2]) {
+                    await this.prisma.task.create({
+                      data: {
+                        deviceId: device.id,
+                        type: 'GetParameterValues',
+                        status: 'PENDING',
+                        payload: { names: chunk },
+                        tenantId: device.tenantId,
+                      },
+                    });
+                  }
+                }
+                if ((ft.type === 'SetParameterValues' || ft.type === 'Provision') && payload.parameters) {
+                  const paramKeys = Object.keys(payload.parameters);
+                  if (paramKeys.length > 1) {
+                    const half = Math.ceil(paramKeys.length / 2);
+                    const split1 = paramKeys.slice(0, half);
+                    const split2 = paramKeys.slice(half);
+                    this.logger.warn(`[FAULT-9005] Splitting SPV task ${ft.id}: ${paramKeys.length} params -> ${split1.length} + ${split2.length}`);
+                    for (const chunk of [split1, split2]) {
+                      const chunkParams: Record<string, string> = {};
+                      for (const k of chunk) chunkParams[k] = payload.parameters[k];
+                      await this.prisma.task.create({
+                        data: {
+                          deviceId: device.id,
+                          type: 'Provision',
+                          status: 'PENDING',
+                          payload: { parameters: chunkParams },
+                          tenantId: device.tenantId,
+                        },
+                      });
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         return this.buildEmptySoapEnvelope();
