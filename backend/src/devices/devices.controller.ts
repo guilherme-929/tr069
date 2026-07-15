@@ -1,6 +1,7 @@
-import { Controller, Get, Param, Patch, Delete, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Delete, Query, Body, UseGuards, Post } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { DevicesService } from './devices.service';
+import { HomologationService } from '../models/homologation.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -12,7 +13,15 @@ import { Role } from '@prisma/client';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('api/devices')
 export class DevicesController {
-  constructor(private devicesService: DevicesService) {}
+  constructor(
+    private devicesService: DevicesService,
+    private homologationService: HomologationService,
+  ) {}
+
+  @Get(':id/fingerprint')
+  getFingerprint(@Param('id') id: string) {
+    return this.homologationService.getFingerprint(id);
+  }
 
   @Get()
   findAll(

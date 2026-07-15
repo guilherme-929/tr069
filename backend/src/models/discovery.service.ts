@@ -83,7 +83,7 @@ export class DiscoveryService {
         manufacturer: discovery.manufacturer,
         name: discovery.modelName,
         hwVersion: discovery.hardwareVersion || undefined,
-        dataModel: 'TR-181',
+        dataModel: this.detectDataModel(discovery.parameters),
         description: `Auto-discovered from device ${discovery.serialNumber}`,
         defaultParameters: discovery.parameters as any,
         tenantId: await this.resolveTenantId(),
@@ -118,5 +118,17 @@ export class DiscoveryService {
       current = current[part];
     }
     return current;
+  }
+
+  private detectDataModel(params: Record<string, any>): string {
+    let tr181 = 0;
+    let tr098 = 0;
+    for (const key of Object.keys(params)) {
+      if (key.startsWith('Device.')) tr181++;
+      else if (key.startsWith('InternetGatewayDevice.')) tr098++;
+    }
+    if (tr181 > tr098) return 'TR-181';
+    if (tr098 > tr181) return 'TR-098';
+    return 'TR-181';
   }
 }

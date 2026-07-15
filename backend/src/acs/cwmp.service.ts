@@ -427,7 +427,20 @@ export class CwmpService {
     });
     const isRapidReconnect = !isNewDevice && recentEvents > 8;
 
-    if (needsProvision && existingProvTask === 0 && !isRapidReconnect) {
+    // Block auto-provisioning for unapproved models (Homologation gate)
+    let homologationBlocked = false;
+    if (needsProvision && device.modelId) {
+      const model = await this.prisma.deviceModel.findUnique({ where: { id: device.modelId } });
+      if (model && (model.homologationStatus === 'PENDING_REVIEW' || model.homologationStatus === 'IN_TESTING')) {
+        const hasHomologTag = device.tags?.includes('homolog');
+        if (!hasHomologTag) {
+          homologationBlocked = true;
+          this.logger.warn(`[HOMOLOG] Blocked auto-provision for ${serial} — model "${model.name}" status=${model.homologationStatus}`);
+        }
+      }
+    }
+
+    if (needsProvision && existingProvTask === 0 && !isRapidReconnect && !homologationBlocked) {
       const acsUrl = device.acsPublicUrlOverride
         || process.env.ACS_PUBLIC_URL
         || `http://${ipAddress || 'localhost'}:${process.env.ACS_PORT || '7547'}`;

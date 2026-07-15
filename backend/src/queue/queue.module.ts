@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { QueueService } from './queue.service';
+import { TaskTimeoutService } from './task-timeout.service';
 import { PrismaService } from '../common/prisma.service';
 import { WebsocketGateway } from '../websocket/websocket.gateway';
 
 @Module({
-  providers: [QueueService, PrismaService, WebsocketGateway],
+  providers: [QueueService, TaskTimeoutService, PrismaService, WebsocketGateway],
   exports: [QueueService],
 })
 export class QueueModule {}

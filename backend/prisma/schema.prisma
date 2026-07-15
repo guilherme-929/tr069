@@ -51,6 +51,13 @@ enum AlertType {
   EXCESSIVE_REBOOT
 }
 
+enum HomologationStatus {
+  PENDING_REVIEW
+  IN_TESTING
+  APPROVED
+  REJECTED
+}
+
 model Tenant {
   id                     String   @id @default(cuid())
   name                   String
@@ -156,6 +163,10 @@ model DeviceModel {
   defaultParameters Json?
   defaultAcsUrl     String?
   provisioningScript String?
+  homologationStatus HomologationStatus @default(PENDING_REVIEW)
+  homologationNotes  String?
+  homologatedAt      DateTime?
+  homologatedBy      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
