@@ -125,7 +125,7 @@ export class CwmpService {
           if (device) {
             const failedTasks = await this.prisma.task.findMany({
               where: { deviceId: device.id, status: 'IN_PROGRESS' },
-              select: { id: true, type: true, payload: true },
+              select: { id: true, type: true, payload: true, maxAttempts: true },
             });
             for (const ft of failedTasks) {
               this.logger.warn(`[FAULT-DETAIL] Device=${device.serial} Task=${ft.id} Type=${ft.type} Payload=${JSON.stringify(ft.payload).slice(0, 300)}`);
@@ -200,22 +200,24 @@ export class CwmpService {
                     const half = Math.ceil(paramKeys.length / 2);
                     const split1 = paramKeys.slice(0, half);
                     const split2 = paramKeys.slice(half);
-                    this.logger.warn(`[FAULT-9005] Splitting SPV task ${ft.id}: ${paramKeys.length} params -> ${split1.length} + ${split2.length}`);
+                    this.logger.warn(`[FAULT-9005] Splitting ${ft.type} task ${ft.id}: ${paramKeys.length} params -> ${split1.length} + ${split2.length}`);
                     for (const chunk of [split1, split2]) {
                       const chunkParams: Record<string, string> = {};
                       for (const k of chunk) chunkParams[k] = payload.parameters[k];
                       await this.prisma.task.create({
                         data: {
                           deviceId: device.id,
-                          type: 'Provision',
+                          type: ft.type, // preserve original type (Provision or SetParameterValues)
                           status: 'PENDING',
                           payload: { parameters: chunkParams },
+                          maxAttempts: ft.maxAttempts || 3,
                           tenantId: device.tenantId,
                         },
                       });
                     }
                   } else if (paramKeys.length === 1) {
                     await this.markPathUnsupported(device.modelId, paramKeys[0]);
+                    this.logger.warn(`[FAULT-9005] Path "${paramKeys[0]}" marked as unsupported for model ${device.modelId || 'unknown'}`);
                   }
                 }
               }
@@ -509,34 +511,93 @@ export class CwmpService {
 
       // Build params from model defaults if available
       let modelParams: Record<string, string> = {};
+      let deviceDataModel: string | null = null;
       if (device.modelId) {
         const model = await this.prisma.deviceModel.findUnique({ where: { id: device.modelId } });
-        if (model?.defaultParameters) {
-          modelParams = model.defaultParameters as Record<string, string>;
+        if (model) {
+          deviceDataModel = model.dataModel;
+          if (model?.defaultParameters) {
+            modelParams = model.defaultParameters as Record<string, string>;
+          }
         }
       }
 
+      // Detect data model from reported parameters if model is not yet associated
+      if (!deviceDataModel) {
+        const reportedParams = Object.keys(paramMap);
+        const hasTR181 = reportedParams.some(k => k.startsWith('Device.'));
+        const hasTR098 = reportedParams.some(k => k.startsWith('InternetGatewayDevice.'));
+        deviceDataModel = hasTR181 && !hasTR098 ? 'TR-181'
+          : hasTR098 && !hasTR181 ? 'TR-098'
+          : null;
+      }
+
+      // Filter provision params to match the device's data model namespace.
+      // CPEs reject SetParameterValues for parameters from the wrong namespace
+      // with SOAP Fault 9005 ("Invalid parameter name").
+      const isTR181 = deviceDataModel === 'TR-181';
+      const isTR098 = deviceDataModel === 'TR-098';
+
       const provisionParams: Record<string, string> = {
-        ...modelParams,
-        'Device.ManagementServer.URL': expectedAcsUrl,
-        'Device.ManagementServer.PeriodicInformInterval': informInterval,
-        'Device.ManagementServer.PeriodicInformEnable': periodicInformEnable,
-        'InternetGatewayDevice.ManagementServer.URL': expectedAcsUrl,
-        'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': informInterval,
-        'InternetGatewayDevice.ManagementServer.PeriodicInformEnable': periodicInformEnable,
+        ...Object.fromEntries(
+          Object.entries(modelParams).filter(([key]) => {
+            if (isTR181 && key.startsWith('InternetGatewayDevice.')) return false;
+            if (isTR098 && key.startsWith('Device.')) return false;
+            return true;
+          }),
+        ),
       };
 
-      this.logger.log(`[PROVISION] Auto-provisioning device ${serial} (model: ${device.modelName}, new: ${isNewDevice})`);
+      if (isTR181 || (!deviceDataModel)) {
+        provisionParams['Device.ManagementServer.URL'] = expectedAcsUrl;
+        provisionParams['Device.ManagementServer.PeriodicInformInterval'] = informInterval;
+        provisionParams['Device.ManagementServer.PeriodicInformEnable'] = periodicInformEnable;
+      }
+      if (isTR098 || (!deviceDataModel)) {
+        provisionParams['InternetGatewayDevice.ManagementServer.URL'] = expectedAcsUrl;
+        provisionParams['InternetGatewayDevice.ManagementServer.PeriodicInformInterval'] = informInterval;
+        provisionParams['InternetGatewayDevice.ManagementServer.PeriodicInformEnable'] = periodicInformEnable;
+      }
 
-      await this.prisma.task.create({
-        data: {
-          deviceId: device.id,
-          type: 'Provision',
-          status: 'PENDING',
-          payload: { parameters: provisionParams },
-          tenantId: device.tenantId,
-        },
-      });
+      this.logger.log(`[PROVISION] Auto-provisioning device ${serial} (model: ${device.modelName}, dataModel: ${deviceDataModel || 'unknown'}, new: ${isNewDevice})`);
+
+      // When data model is unknown, split params into namespace-specific tasks
+      // to avoid Fault 9005 from mixed TR-098 + TR-181 params in one batch.
+      const tr098Params = Object.fromEntries(
+        Object.entries(provisionParams).filter(([k]) => k.startsWith('InternetGatewayDevice.'))
+      );
+      const tr181Params = Object.fromEntries(
+        Object.entries(provisionParams).filter(([k]) => k.startsWith('Device.'))
+      );
+      const otherParams = Object.fromEntries(
+        Object.entries(provisionParams).filter(([k]) => !k.startsWith('InternetGatewayDevice.') && !k.startsWith('Device.'))
+      );
+
+      const tasksToCreate: Record<string, string>[] = [];
+      if (deviceDataModel || Object.keys(tr098Params).length === 0 || Object.keys(tr181Params).length === 0) {
+        tasksToCreate.push(provisionParams);
+      } else {
+        // Unknown data model with params from both namespaces: split into separate tasks
+        if (Object.keys(tr098Params).length > 0) {
+          tasksToCreate.push({ ...otherParams, ...tr098Params });
+        }
+        if (Object.keys(tr181Params).length > 0) {
+          tasksToCreate.push({ ...otherParams, ...tr181Params });
+        }
+        this.logger.log(`[PROVISION] Split into ${tasksToCreate.length} namespace-specific tasks for ${serial}`);
+      }
+
+      for (const params of tasksToCreate) {
+        await this.prisma.task.create({
+          data: {
+            deviceId: device.id,
+            type: 'Provision',
+            status: 'PENDING',
+            payload: { parameters: params },
+            tenantId: device.tenantId,
+          },
+        });
+      }
 
       // Mark as provisioned so we don't re-provision on every periodic inform
       const currentParams = (device.parameters as Record<string, any>) || {};
@@ -1845,10 +1906,41 @@ export class CwmpService {
       case 'SetParameterValues':
       case 'Provision': {
         const payload = task.payload as any;
-        const params = payload?.parameters
+        let params = payload?.parameters
           ? Object.entries(payload.parameters as Record<string, string>).map(([name, value]) => ({ name, value }))
           : (payload?.params || []);
         if (params.length === 0) return this.buildEmptySoapEnvelope();
+
+        // Detect mixed namespaces and split into separate tasks to avoid Fault 9005
+        const hasTR181 = params.some((p: any) => p.name.startsWith('Device.'));
+        const hasTR098 = params.some((p: any) => p.name.startsWith('InternetGatewayDevice.'));
+        if (hasTR181 && hasTR098) {
+          const tr181Batch = params.filter((p: any) => p.name.startsWith('Device.'));
+          const tr098Batch = params.filter((p: any) => p.name.startsWith('InternetGatewayDevice.'));
+          const otherBatch = params.filter((p: any) => !p.name.startsWith('Device.') && !p.name.startsWith('InternetGatewayDevice.'));
+
+          // Keep only one namespace in this task, queue the rest as new tasks
+          const keepBatch = tr181Batch.length >= tr098Batch.length ? tr181Batch : tr098Batch;
+          const requeueBatch = tr181Batch.length >= tr098Batch.length ? tr098Batch : tr181Batch;
+          params = [...otherBatch, ...keepBatch];
+
+          if (requeueBatch.length > 0) {
+            const requeueParams: Record<string, string> = {};
+            for (const p of requeueBatch) requeueParams[(p as any).name] = (p as any).value;
+            await this.prisma.task.create({
+              data: {
+                deviceId: task.deviceId,
+                type: task.type,
+                status: 'PENDING',
+                payload: { parameters: requeueParams },
+                tenantId: task.tenantId,
+                maxAttempts: task.maxAttempts || 3,
+              },
+            });
+            this.logger.log(`[SPV-NAMESPACE] Split ${requeueBatch.length} params into separate task for device ${task.deviceId}`);
+          }
+        }
+
         const maxSpvBatch = 10;
         const batch = params.slice(0, maxSpvBatch);
         if (params.length > maxSpvBatch) {
