@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ConfigService } from '../system-config/config.service';
 
@@ -12,25 +12,20 @@ export class ProvisioningService {
   ) {}
 
   private async discoverWifi5GInstance(deviceId: string, deviceModelName: string, parameters: Record<string, string>): Promise<number> {
-    // First, try to find 5GHz instances from discovered parameters.
-    // 5GHz bands typically have SSID ending in "-5G" or are on instance > 1
-    // with a different SSID than instance 1 (2.4GHz).
     const ssid24 = parameters['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID']
       || parameters['Device.WiFi.SSID.1.SSID']
       || parameters['InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.SSID']
       || '';
 
-    // Check all WLANConfiguration instances for 5GHz indicators
     for (let i = 2; i <= 8; i++) {
-      const ssid = parameters[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.SSID`]
-        || parameters[`Device.WiFi.SSID.${i}.SSID`]
-        || parameters[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.SSID`];
+      const ssid = parameters['InternetGatewayDevice.LANDevice.1.WLANConfiguration.' + i + '.SSID']
+        || parameters['Device.WiFi.SSID.' + i + '.SSID']
+        || parameters['InternetGatewayDevice.LANDevice.1.WIFI.SSID.' + i + '.SSID'];
       if (!ssid || ssid === ssid24) continue;
 
-      // Check for 5GHz indicators: standard, frequency band, or SSID suffix
-      const std = parameters[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Standard`] || '';
-      const band = parameters[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.X_ZTE-COM_OperatingFrequencyBand`]
-        || parameters[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.X_ZTE-COM_OperatingFrequencyBand`]
+      const std = parameters['InternetGatewayDevice.LANDevice.1.WLANConfiguration.' + i + '.Standard'] || '';
+      const band = parameters['InternetGatewayDevice.LANDevice.1.WLANConfiguration.' + i + '.X_ZTE-COM_OperatingFrequencyBand']
+        || parameters['InternetGatewayDevice.LANDevice.1.WIFI.SSID.' + i + '.X_ZTE-COM_OperatingFrequencyBand']
         || '';
 
       const is5G = std.includes('ac') || std.includes('a') || std.includes('n') && !std.includes('2.4')
@@ -38,23 +33,21 @@ export class ProvisioningService {
         || ssid.includes('-5G') || ssid.includes('_5G');
 
       if (is5G) {
-        this.logger.log(`[WIFI-5G] Auto-discovered 5GHz instance ${i} for ${deviceModelName} (SSID=${ssid})`);
+        this.logger.log('[WIFI-5G] Auto-discovered 5GHz instance ' + i + ' for ' + deviceModelName + ' (SSID=' + ssid + ')');
         return i;
       }
     }
 
-    // Check TR-181 WiFi instances for 5GHz indicators
     for (let i = 1; i <= 4; i++) {
-      const ssid = parameters[`Device.WiFi.SSID.${i}.SSID`];
+      const ssid = parameters['Device.WiFi.SSID.' + i + '.SSID'];
       if (!ssid || ssid === ssid24) continue;
-      const band = parameters[`Device.WiFi.AccessPoint.${i}.OperatingFrequencyBand`] || '';
+      const band = parameters['Device.WiFi.AccessPoint.' + i + '.OperatingFrequencyBand'] || '';
       if (band.includes('5GHz') || band.includes('5') || ssid.includes('-5G')) {
-        this.logger.log(`[WIFI-5G] Auto-discovered TR-181 5GHz instance ${i} for ${deviceModelName} (SSID=${ssid})`);
+        this.logger.log('[WIFI-5G] Auto-discovered TR-181 5GHz instance ' + i + ' for ' + deviceModelName + ' (SSID=' + ssid + ')');
         return i;
       }
     }
 
-    // Check discovered leaves structure for any WiFi-related paths
     const discovered = (parameters.__discovered__ || {}) as any;
     const leaves: string[] = discovered._leaves || [];
     const instanceRe = /WLANConfiguration\.(\d+)\.SSID/;
@@ -71,7 +64,6 @@ export class ProvisioningService {
     }
 
     if (wifiMap.size > 0) {
-      // Find the instance with the most different SSID from instance 1 (likely 5GHz)
       let bestInstance = 2;
       let bestDiff = 0;
       for (const [inst, ssid] of wifiMap) {
@@ -83,26 +75,24 @@ export class ProvisioningService {
           }
         }
       }
-      this.logger.log(`[WIFI-5G] Discovered from parameter tree: instance ${bestInstance} for ${deviceModelName}`);
+      this.logger.log('[WIFI-5G] Discovered from parameter tree: instance ' + bestInstance + ' for ' + deviceModelName);
       return bestInstance;
     }
 
-    // Fallback: use tenant config if available
     const wifiConfig = await this.configService.getValue('default', 'provision.wifi.5gInstance');
     if (wifiConfig) {
       const configured = parseInt(wifiConfig, 10);
       if (configured > 1 && configured <= 8) return configured;
     }
 
-    // Last resort: try instance 5 (most common for ZTE F670L) then instance 2
-    const hasInstance5 = leaves.some(l => l.includes('WLANConfiguration.5.'))
+    const hasInstance5 = leaves.some(function(l) { return l.includes('WLANConfiguration.5.'); })
       || parameters['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID'] !== undefined;
     if (hasInstance5) {
-      this.logger.log(`[WIFI-5G] Instance 5 detected for ${deviceModelName} — using it as 5GHz`);
+      this.logger.log('[WIFI-5G] Instance 5 detected for ' + deviceModelName + ' — using it as 5GHz');
       return 5;
     }
 
-    this.logger.log(`[WIFI-5G] Defaulting to instance 2 for ${deviceModelName} (no 5GHz indicators found)`);
+    this.logger.log('[WIFI-5G] Defaulting to instance 2 for ' + deviceModelName + ' (no 5GHz indicators found)');
     return 2;
   }
 
@@ -119,25 +109,37 @@ export class ProvisioningService {
     const acsUrl = device.acsPublicUrlOverride
       || device.tenant.acsPublicUrl
       || process.env.ACS_PUBLIC_URL
-      || `http://localhost:${process.env.ACS_PORT || '7547'}`;
+      || 'http://localhost:' + (process.env.ACS_PORT || '7547');
 
     const informInterval = await this.configService.getValue('default', 'cwmp.inform.interval') || '300';
     const periodicInformEnable = await this.configService.getValue('default', 'device.default.periodicInformEnable') || 'true';
 
     const paramsWithCr: Record<string, string> = {
       ...defaultParams,
-      'Device.ManagementServer.URL': defaultParams['Device.ManagementServer.URL'] || `${acsUrl}/cwmp`,
+      'Device.ManagementServer.URL': defaultParams['Device.ManagementServer.URL'] || acsUrl + '/cwmp',
       'Device.ManagementServer.PeriodicInformInterval': defaultParams['Device.ManagementServer.PeriodicInformInterval'] || informInterval,
       'InternetGatewayDevice.ManagementServer.PeriodicInformInterval': defaultParams['InternetGatewayDevice.ManagementServer.PeriodicInformInterval'] || informInterval,
       'Device.ManagementServer.PeriodicInformEnable': periodicInformEnable,
       'InternetGatewayDevice.ManagementServer.PeriodicInformEnable': periodicInformEnable,
     };
 
-    // WiFi provisioning: apply tenant defaults to both 2.4GHz and 5GHz bands.
-    // The tenant config supports per-band overrides:
-    //   - ssid / password    → fallback applied to BOTH bands
-    //   - ssid2g / password2g → 2.4GHz specific (overrides ssid/password)
-    //   - ssid5g / password5g → 5GHz specific (overrides ssid/password)
+    const dataModel = device.model?.dataModel as string | null;
+    if (dataModel === 'TR-181') {
+      for (const key of Object.keys(paramsWithCr)) {
+        if (key.startsWith('InternetGatewayDevice.')) {
+          delete paramsWithCr[key];
+        }
+      }
+      this.logger.debug('[PROVISION] Filtered to TR-181 namespace for ' + device.serial + ' (' + device.modelName + ')');
+    } else if (dataModel === 'TR-098') {
+      for (const key of Object.keys(paramsWithCr)) {
+        if (key.startsWith('Device.')) {
+          delete paramsWithCr[key];
+        }
+      }
+      this.logger.debug('[PROVISION] Filtered to TR-098 namespace for ' + device.serial + ' (' + device.modelName + ')');
+    }
+
     const wifiConfig = (device.tenant.defaultWiFiConfig as Record<string, string>) || {};
     const ssid2g = wifiConfig.ssid2g || wifiConfig.ssid;
     const pass2g = wifiConfig.password2g || wifiConfig.password;
@@ -145,22 +147,30 @@ export class ProvisioningService {
     const pass5g = wifiConfig.password5g || wifiConfig.password;
 
     if (ssid2g && pass2g) {
-      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] = ssid2g;
-      paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] = pass2g;
+      if (!dataModel || dataModel === 'TR-098') {
+        paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] = ssid2g;
+        paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase'] = pass2g;
+      }
+      if (!dataModel || dataModel === 'TR-181') {
+        paramsWithCr['Device.WiFi.SSID.1.SSID'] = ssid2g;
+        paramsWithCr['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] = pass2g;
+      }
     }
 
     if (ssid5g && pass5g) {
       const inst5g = await this.discoverWifi5GInstance(device.id, device.modelName, deviceParams);
-      this.logger.log(`[PROVISION] Using 5GHz instance ${inst5g} for ${device.serial} (${device.modelName})`);
+      this.logger.log('[PROVISION] Using 5GHz instance ' + inst5g + ' for ' + device.serial + ' (' + device.modelName + ')');
 
-      // Set both TR-098 and TR-181 paths for the 5GHz instance
-      paramsWithCr[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${inst5g}.SSID`] = ssid5g;
-      paramsWithCr[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${inst5g}.KeyPassphrase`] = pass5g;
-      paramsWithCr[`Device.WiFi.SSID.${inst5g}.SSID`] = ssid5g;
-      paramsWithCr[`Device.WiFi.AccessPoint.${inst5g}.Security.KeyPassphrase`] = pass5g;
+      if (!dataModel || dataModel === 'TR-098') {
+        paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.' + inst5g + '.SSID'] = ssid5g;
+        paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.' + inst5g + '.KeyPassphrase'] = pass5g;
+      }
+      if (!dataModel || dataModel === 'TR-181') {
+        paramsWithCr['Device.WiFi.SSID.' + inst5g + '.SSID'] = ssid5g;
+        paramsWithCr['Device.WiFi.AccessPoint.' + inst5g + '.Security.KeyPassphrase'] = pass5g;
+      }
     }
 
-    // Read parameter overrides from System Config (prefix: provision.param.)
     const provisionParams = await this.configService.getByPrefix(tenantId, 'provision.param.');
     Object.assign(paramsWithCr, provisionParams);
 
@@ -184,12 +194,12 @@ export class ProvisioningService {
         action: 'PROVISION',
         entity: 'DEVICE',
         entityId: deviceId,
-        detail: `Provisioning queued for ${device.serial} with ACS URL: ${acsUrl}`,
+        detail: 'Provisioning queued for ' + device.serial + ' with ACS URL: ' + acsUrl,
         tenantId,
       },
     });
 
-    this.logger.log(`Provision task ${task.id} queued for device ${device.serial}`);
+    this.logger.log('Provision task ' + task.id + ' queued for device ' + device.serial);
 
     return { task, message: 'Provisioning queued. Will be applied on next CPE connection.' };
   }

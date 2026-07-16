@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
+﻿import { Injectable, Logger, OnModuleInit, HttpException, HttpStatus } from '@nestjs/common';
 import * as http from 'http';
 import * as https from 'https';
 import { PrismaService } from '../common/prisma.service';
@@ -77,7 +77,7 @@ export class AcsService implements OnModuleInit {
         // a previous session was abandoned (CPE didn't respond). Fail it immediately
         // so the pipeline is not blocked until the stale timeout.
         if (serial && (body.includes('<Inform>') || body.includes('<cwmp:Inform>'))) {
-          await this.failInProgressTasks(serial, 'New Inform — previous command abandoned by CPE');
+          await this.failInProgressTasks(serial, 'New Inform â€” previous command abandoned by CPE');
         }
 
         // Per TR-069, ACS MUST echo back the same cwmp:ID from the CPE's request.
@@ -109,8 +109,6 @@ export class AcsService implements OnModuleInit {
           }
         }
 
-        // InformResponse handling — always send InformResponse, then use DB flag
-        // to detect "second Inform" (reconnection) for ZTE CPEs that never send empty POST.
         if (serial && isInformResponse) {
           const dev = await this.prisma.device.findUnique({ where: { serial } });
           if (dev) {
@@ -118,11 +116,16 @@ export class AcsService implements OnModuleInit {
             const lastRespAt = params.__lastInformResponseAt
               ? new Date(params.__lastInformResponseAt).getTime()
               : 0;
-            const recentThreshold = Date.now() - 5 * 60 * 1000;
+            const deviceInformInterval = params.PeriodicInformInterval
+              || params['Device.ManagementServer.PeriodicInformInterval']
+              || params['InternetGatewayDevice.ManagementServer.PeriodicInformInterval']
+              || '300';
+            const intervalSec = Math.max(60, Math.min(parseInt(deviceInformInterval, 10), 600)) * 1000;
+            const recentThreshold = Date.now() - Math.round(intervalSec * 0.5);
             const isReconnection = lastRespAt > 0 && lastRespAt < recentThreshold;
 
             if (isReconnection) {
-              slog(`Device ${serial} reconnected (DB flag, last response >5 min ago) — checking pending tasks`);
+              slog(`Device ${serial} reconnected (DB flag, last response >5 min ago) â€” checking pending tasks`);
               // Clear the flag so next Inform won't re-trigger
               await this.clearLastInformResponseFlag(dev);
               // Fail any IN_PROGRESS tasks from the previous session
@@ -132,12 +135,64 @@ export class AcsService implements OnModuleInit {
                 return;
               }
             } else {
-              // First Inform or periodic — set flag for next reconnect
+              // First Inform or periodic - set flag for next reconnect
               await this.setLastInformResponseFlag(dev);
+              // Also try to deliver pending tasks created before this Inform
+              // (handles CPEs that never send empty POST)
+              const oldPending = await this.prisma.task.count({
+                where: { deviceId: dev.id, status: 'PENDING', createdAt: { lt: new Date(Date.now() - 30000) } },
+              });
+              if (oldPending > 0 && await this.trySendPendingTask(dev, res)) {
+                slog(`Old pending task sent to device ${serial} (inline fallback)`);
+                await this.clearLastInformResponseFlag(dev);
+                return;
+              }
             }
           }
         }
 
+        // Multipart MIME fallback: include first pending task with InformResponse
+        // for CPEs that never send empty POST (e.g., some TP-Link).
+        if (serial && isInformResponse) {
+          const dev = await this.prisma.device.findUnique({ where: { serial } });
+          if (dev) {
+            const mpPending = await this.prisma.task.findFirst({
+              where: { deviceId: dev.id, status: 'PENDING' },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (mpPending) {
+              const mpAttempts = (mpPending.attempts || 0) + 1;
+              const mpMaxAttempts = mpPending.maxAttempts || 5;
+              if (mpAttempts <= mpMaxAttempts) {
+                await this.prisma.task.update({
+                  where: { id: mpPending.id },
+                  data: { status: 'IN_PROGRESS', attempts: mpAttempts },
+                });
+                const mpCmdXml = await this.cwmp.buildCwmpCommand(mpPending, dev.id);
+                const mpBoundary = 'TR069-MIME-Boundary-' + Date.now().toString(36);
+                const crlf = String.fromCharCode(13,10);
+                const mpCmdClean = mpCmdXml.replace(/^<\?xml[^>]*>\s*/, '');
+                const mpBody = '--' + mpBoundary + crlf
+                  + 'Content-Type: text/xml; charset=utf-8' + crlf
+                  + 'Content-Transfer-Encoding: 7bit' + crlf
+                  + crlf
+                  + responseWithCorrectId + crlf
+                  + '--' + mpBoundary + crlf
+                  + 'Content-Type: text/xml; charset=utf-8' + crlf
+                  + 'Content-Transfer-Encoding: 7bit' + crlf
+                  + crlf
+                  + mpCmdClean + crlf
+                  + '--' + mpBoundary + '--';
+                res.writeHead(200, {
+                  'Content-Type': 'multipart/mixed; boundary="' + mpBoundary + '"',
+                });
+                res.end(mpBody);
+                console.log('Multipart MIME sent to ' + serial);
+                return;
+              }
+            }
+          }
+        }
         res.writeHead(200, {
           'Content-Type': 'text/xml; charset=utf-8',
           'SOAPServer': 'TR-069 ACS/1.0',
@@ -168,7 +223,7 @@ export class AcsService implements OnModuleInit {
       const backoffMs = Math.min(1000 * Math.pow(2, newAttempts - 1), 300000); // max 5 min
       const elapsed = Date.now() - new Date(task.updatedAt).getTime();
       if (elapsed < backoffMs) {
-        this.logger.debug(`Device ${dev.serial} — task "${task.type}" in backoff (${Math.round((backoffMs - elapsed) / 1000)}s remaining), skipping`);
+        this.logger.debug(`Device ${dev.serial} â€” task "${task.type}" in backoff (${Math.round((backoffMs - elapsed) / 1000)}s remaining), skipping`);
         return false;
       }
     }
@@ -178,7 +233,7 @@ export class AcsService implements OnModuleInit {
         where: { id: task.id },
         data: { status: 'FAILED', error: `Failed after ${maxAttempts} attempts (exponential backoff exhausted)`, attempts: newAttempts },
       });
-      this.logger.warn(`Device ${dev.serial} — task "${task.type}" failed after ${newAttempts} attempts`);
+      this.logger.warn(`Device ${dev.serial} â€” task "${task.type}" failed after ${newAttempts} attempts`);
       return false;
     }
 
@@ -187,7 +242,7 @@ export class AcsService implements OnModuleInit {
       data: { status: 'IN_PROGRESS', attempts: newAttempts },
     });
     const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
-    this.logger.log(`Device ${dev.serial} — sending command "${task.type}" (attempt ${newAttempts}/${maxAttempts})`);
+    this.logger.log(`Device ${dev.serial} â€” sending command "${task.type}" (attempt ${newAttempts}/${maxAttempts})`);
     res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
     res.end(commandXml);
     return true;
@@ -216,7 +271,7 @@ export class AcsService implements OnModuleInit {
       const backoffMs = this.getBackoffMs(newAttempts);
       const elapsed = Date.now() - new Date(task.updatedAt).getTime();
       if (elapsed < backoffMs) {
-        this.logger.debug(`Device ${dev.serial} — task "${task.type}" in backoff (${Math.round((backoffMs - elapsed) / 1000)}s remaining), skipping`);
+        this.logger.debug(`Device ${dev.serial} â€” task "${task.type}" in backoff (${Math.round((backoffMs - elapsed) / 1000)}s remaining), skipping`);
         return false;
       }
     }
@@ -226,7 +281,7 @@ export class AcsService implements OnModuleInit {
         where: { id: task.id },
         data: { status: 'FAILED', error: `Failed after ${maxAttempts} attempts (exponential backoff exhausted)`, attempts: newAttempts },
       });
-      this.logger.warn(`Device ${dev.serial} — task "${task.type}" failed after ${newAttempts} attempts`);
+      this.logger.warn(`Device ${dev.serial} â€” task "${task.type}" failed after ${newAttempts} attempts`);
       return false;
     }
     await this.prisma.task.update({
@@ -247,7 +302,7 @@ export class AcsService implements OnModuleInit {
       where: { id: dev.id },
       data: { parameters: params as any },
     });
-    this.logger.log(`Device ${dev.serial} — set __lastInformResponseAt flag`);
+    this.logger.log(`Device ${dev.serial} â€” set __lastInformResponseAt flag`);
   }
 
   private async clearLastInformResponseFlag(dev: any) {
@@ -280,7 +335,7 @@ export class AcsService implements OnModuleInit {
         where: { id: t.id },
         data: { status: 'FAILED', error: 'Timed out waiting for CPE response' },
       });
-      this.logger.warn(`Task "${t.type}" (${t.id}) stale — failed after 15 min`);
+      this.logger.warn(`Task "${t.type}" (${t.id}) stale â€” failed after 15 min`);
     }
   }
 
@@ -295,7 +350,7 @@ export class AcsService implements OnModuleInit {
         where: { id: t.id },
         data: { status: 'FAILED', error },
       });
-      this.logger.warn(`Task "${t.type}" (${t.id}) — ${error}`);
+      this.logger.warn(`Task "${t.type}" (${t.id}) â€” ${error}`);
     }
   }
 
@@ -588,3 +643,5 @@ export class AcsService implements OnModuleInit {
     return true;
   }
 }
+
+
