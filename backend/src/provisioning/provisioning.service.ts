@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { ConfigService } from '../system-config/config.service';
 
@@ -88,7 +88,7 @@ export class ProvisioningService {
     const hasInstance5 = leaves.some(function(l) { return l.includes('WLANConfiguration.5.'); })
       || parameters['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID'] !== undefined;
     if (hasInstance5) {
-      this.logger.log('[WIFI-5G] Instance 5 detected for ' + deviceModelName + ' — using it as 5GHz');
+      this.logger.log('[WIFI-5G] Instance 5 detected for ' + deviceModelName + ' � using it as 5GHz');
       return 5;
     }
 
@@ -138,6 +138,17 @@ export class ProvisioningService {
         }
       }
       this.logger.debug('[PROVISION] Filtered to TR-098 namespace for ' + device.serial + ' (' + device.modelName + ')');
+    }
+
+    // Remove paths that are already known to be unsupported for this model
+    const unsupported = (device.model?.unsupportedParameters as string[]) || [];
+    if (unsupported.length > 0) {
+      for (const key of Object.keys(paramsWithCr)) {
+        if (unsupported.includes(key)) {
+          delete paramsWithCr[key];
+        }
+      }
+      this.logger.debug('[PROVISION] Removed ' + unsupported.filter(u => paramsWithCr.hasOwnProperty(u) === false).length + ' unsupported params for ' + device.serial);
     }
 
     const wifiConfig = (device.tenant.defaultWiFiConfig as Record<string, string>) || {};

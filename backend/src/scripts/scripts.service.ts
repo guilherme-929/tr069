@@ -317,6 +317,21 @@ export class ScriptsService {
   }
 
   private async createSetParamTask(deviceId: string, path: string, value: any, tenantId: string) {
+    const device = await this.prisma.device.findUnique({
+      where: { id: deviceId },
+      include: { model: true },
+    });
+    if (!device) return;
+
+    const model = device.model;
+    if (model) {
+      const unsupported = (model.unsupportedParameters as string[]) || [];
+      if (unsupported.includes(path)) {
+        this.logger.warn(`[createSetParamTask] Skipping unsupported path "${path}" for device ${device.serial} (model: ${model.name})`);
+        return;
+      }
+    }
+
     const existingPending = await this.prisma.task.count({
       where: { deviceId, status: 'PENDING', type: 'SetParameterValues' },
     });
