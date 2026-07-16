@@ -9,7 +9,9 @@ build/
 coverage/
 .turbo/
 .next/
+.agents/
 .agents/*
+.agent/
 .agent/*
 
 # Chaves SSH e arquivos sensíveis

@@ -52,9 +52,13 @@ export class AlertsService {
     return alert;
   }
 
-  @Cron('*/5 * * * *')
+  @Cron('*/1 * * * *')
   async checkOfflineDevices() {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const now = Date.now();
+    const fiveMinutesAgo = new Date(now - 5 * 60 * 1000);
+    const oneHourAgo = new Date(now - 60 * 60 * 1000);
+    const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
     const offlineDevices = await this.prisma.device.findMany({
       where: {
         status: 'ONLINE',
@@ -68,14 +72,71 @@ export class AlertsService {
         data: { status: 'OFFLINE' },
       });
 
+      const lastContactTime = device.lastContact?.getTime() || 0;
+      const elapsed = now - lastContactTime;
+
+      const severity: AlertSeverity =
+        elapsed > 24 * 60 * 60 * 1000 ? 'CRITICAL'
+          : elapsed > 60 * 60 * 1000 ? 'WARNING'
+          : 'WARNING';
+
       await this.create({
         type: 'DEVICE_OFFLINE',
-        severity: 'WARNING',
+        severity,
         title: `Device ${device.serial} went offline`,
-        message: `Last contact: ${device.lastContact}`,
+        message: `Last contact: ${device.lastContact}. Elapsed: ${Math.round(elapsed / 60000)} min`,
         deviceId: device.id,
         tenantId: device.tenantId,
       });
+    }
+
+    // Escalate existing OFFLINE alerts based on elapsed time
+    const criticalThreshold = new Date(now - 24 * 60 * 60 * 1000);
+    const existingOfflineAlerts = await this.prisma.alert.findMany({
+      where: {
+        type: 'DEVICE_OFFLINE',
+        resolved: false,
+        severity: 'WARNING',
+        createdAt: { lt: criticalThreshold },
+      },
+      include: { device: true },
+    });
+
+    for (const alert of existingOfflineAlerts) {
+      if (!alert.device) continue;
+      const elapsed = now - (alert.device.lastContact?.getTime() || alert.createdAt.getTime());
+      if (elapsed > 24 * 60 * 60 * 1000) {
+        await this.prisma.alert.update({
+          where: { id: alert.id },
+          data: { severity: 'CRITICAL', title: `[CRITICAL] Device ${alert.device.serial} offline > 24h` },
+        });
+        this.ws.broadcast('alert:update', { id: alert.id, severity: 'CRITICAL' });
+      }
+    }
+
+    // Detect devices that never connected (created >30min ago, never had lastContact)
+    const neverConnectedThreshold = new Date(now - 30 * 60 * 1000);
+    const neverConnected = await this.prisma.device.findMany({
+      where: {
+        lastContact: null,
+        createdAt: { lt: neverConnectedThreshold },
+      },
+    });
+
+    for (const device of neverConnected) {
+      const existingAlert = await this.prisma.alert.findFirst({
+        where: { deviceId: device.id, type: 'DEVICE_OFFLINE', resolved: false, message: { contains: 'never connected' } },
+      });
+      if (!existingAlert) {
+        await this.create({
+          type: 'DEVICE_OFFLINE',
+          severity: 'WARNING',
+          title: `Device ${device.serial} never connected`,
+          message: `Device created ${device.createdAt.toISOString()} but never connected to ACS`,
+          deviceId: device.id,
+          tenantId: device.tenantId,
+        });
+      }
     }
   }
 

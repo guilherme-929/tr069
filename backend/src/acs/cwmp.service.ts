@@ -644,7 +644,7 @@ export class CwmpService {
     const fault = tc?.Fault || { FaultCode: '0', FaultString: '' };
     const faultCode = fault?.FaultCode || '0';
 
-    this.logger.log(`TransferComplete: commandKey=${commandKey}, faultCode=${faultCode}`);
+    this.logger.log(`[CWMP-EVENT] TransferComplete: commandKey=${commandKey}, faultCode=${faultCode}, faultString=${fault?.FaultString || ''}`);
 
     if (commandKey) {
       await this.prisma.task.updateMany({
@@ -654,6 +654,33 @@ export class CwmpService {
           result: { faultCode: faultCode, faultString: fault?.FaultString } as any,
         },
       });
+    }
+
+    // Log TRANSFER COMPLETE event if we have a device context
+    if (this.lastSerial) {
+      const device = await this.prisma.device.findUnique({ where: { serial: this.lastSerial } });
+      if (device) {
+        await this.prisma.event.create({
+          data: {
+            deviceId: device.id,
+            code: '7 TRANSFER COMPLETE',
+            message: `Transfer ${faultCode === '0' ? 'completed' : 'failed'}: commandKey=${commandKey}, fault=${faultCode} ${fault?.FaultString || ''}`,
+            data: { commandKey, faultCode, faultString: fault?.FaultString } as any,
+            tenantId: device.tenantId,
+          },
+        });
+
+        await this.prisma.log.create({
+          data: {
+            action: 'TRANSFER_COMPLETE',
+            entity: 'DEVICE',
+            entityId: device.id,
+            detail: `Transfer ${faultCode === '0' ? 'completed' : 'failed'} for ${device.serial}: commandKey=${commandKey}`,
+            deviceId: device.id,
+            tenantId: device.tenantId,
+          },
+        });
+      }
     }
 
     return this.buildSoapResponse('TransferCompleteResponse', {});
@@ -983,8 +1010,40 @@ export class CwmpService {
     });
     if (!device) throw new Error('Device not found');
 
-    const latestFirmware = device.model?.firmwares?.[0] || device.firmware;
-    if (!latestFirmware) throw new Error('No firmware available for update');
+    if (device.firmware && device.firmware.status === 'LATEST') {
+      return { message: 'Device already has latest firmware', firmware: device.firmware.version };
+    }
+
+    let latestFirmware = device.model?.firmwares?.[0] || device.firmware;
+
+    const params = (device.parameters as Record<string, string>) || {};
+    const oui = device.manufacturer
+      || params['DeviceID.OUI']
+      || '';
+    const productClass = device.modelName
+      || params['DeviceID.ProductClass']
+      || '';
+
+    // If no firmware found via modelId, try matching by OUI and ProductClass
+    if (!latestFirmware && oui && productClass) {
+      const modelByOuiPc = await this.prisma.deviceModel.findFirst({
+        where: { manufacturer: { contains: oui }, name: productClass, tenantId: device.tenantId },
+        include: { firmwares: { where: { status: 'LATEST' }, take: 1 } },
+      });
+      if (modelByOuiPc?.firmwares?.[0]) {
+        latestFirmware = modelByOuiPc.firmwares[0];
+        if (!device.modelId) {
+          await this.prisma.device.update({
+            where: { id: deviceId },
+            data: { modelId: modelByOuiPc.id },
+          });
+        }
+      }
+    }
+
+    if (!latestFirmware) {
+      throw new Error(`No firmware available for device ${device.serial} (OUI=${oui || '?'}, ProductClass=${productClass || '?'})`);
+    }
 
     const downloadUrl = latestFirmware.filePath || `http://acs.local:7567/${latestFirmware.fileName}`;
     return this.handleDownload(deviceId, downloadUrl, '1 Firmware Upgrade Image');

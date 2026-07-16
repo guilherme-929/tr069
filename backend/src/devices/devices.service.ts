@@ -200,16 +200,117 @@ export class DevicesService {
     return results;
   }
 
+  private static readonly VIRTUAL_PARAM_MAPPINGS: Record<string, { label: string; paths: string[]; transform?: 'first' | 'join' }> = {
+    'WanIP': {
+      label: 'WAN IP Address',
+      paths: [
+        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress',
+        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.ExternalIPAddress',
+        'Device.IP.Interface.1.IPv4Address',
+      ],
+    },
+    'WanMac': {
+      label: 'WAN MAC Address',
+      paths: [
+        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.MACAddress',
+        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.MACAddress',
+        'Device.Ethernet.Interface.1.MACAddress',
+      ],
+    },
+    'Ssid24': {
+      label: 'SSID 2.4GHz',
+      paths: [
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
+        'Device.WiFi.SSID.1.SSID',
+        'InternetGatewayDevice.LANDevice.1.WIFI.SSID.1.SSID',
+      ],
+    },
+    'Ssid5': {
+      label: 'SSID 5GHz',
+      paths: [
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID',
+        'Device.WiFi.SSID.2.SSID',
+        'InternetGatewayDevice.LANDevice.1.WIFI.SSID.2.SSID',
+      ],
+    },
+    'SerialNumber': {
+      label: 'Serial Number',
+      paths: [
+        'Device.DeviceInfo.SerialNumber',
+        'InternetGatewayDevice.DeviceInfo.SerialNumber',
+      ],
+    },
+    'SoftwareVersion': {
+      label: 'Firmware Version',
+      paths: [
+        'Device.DeviceInfo.SoftwareVersion',
+        'InternetGatewayDevice.DeviceInfo.SoftwareVersion',
+      ],
+    },
+    'HardwareVersion': {
+      label: 'Hardware Version',
+      paths: [
+        'Device.DeviceInfo.HardwareVersion',
+        'InternetGatewayDevice.DeviceInfo.HardwareVersion',
+      ],
+    },
+    'UpTime': {
+      label: 'Uptime',
+      paths: [
+        'Device.DeviceInfo.UpTime',
+        'InternetGatewayDevice.DeviceInfo.UpTime',
+      ],
+    },
+    'ConnectionRequestURL': {
+      label: 'Connection Request URL',
+      paths: [
+        'Device.ManagementServer.ConnectionRequestURL',
+        'InternetGatewayDevice.ManagementServer.ConnectionRequestURL',
+      ],
+    },
+    'ConnectedDevices24': {
+      label: 'Connected Devices (2.4GHz)',
+      paths: [
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations',
+        'Device.WiFi.AccessPoint.1.AssociatedDeviceNumberOfEntries',
+      ],
+    },
+    'ConnectedDevices5': {
+      label: 'Connected Devices (5GHz)',
+      paths: [
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations',
+        'Device.WiFi.AccessPoint.2.AssociatedDeviceNumberOfEntries',
+      ],
+    },
+  };
+
   async computeAndStoreVirtualParameters(deviceId: string) {
     try {
       const device = await this.prisma.device.findUnique({ where: { id: deviceId } });
       if (!device) return;
 
       const params = (device.parameters as Record<string, string>) || {};
-      const defs = await this.getVirtualParameterDefinitions(device.tenantId);
-      if (defs.size === 0) return;
+      const userDefs = await this.getVirtualParameterDefinitions(device.tenantId);
 
-      const computed = await this.computeVirtualParameters(params, defs);
+      const computed: Record<string, string> = {};
+
+      // Built-in TR-098/TR-181 normalization mappings
+      for (const [name, mapping] of Object.entries(DevicesService.VIRTUAL_PARAM_MAPPINGS)) {
+        for (const path of mapping.paths) {
+          const val = params[path];
+          if (val !== undefined && val !== '') {
+            computed[name] = val;
+            break;
+          }
+        }
+      }
+
+      // User-defined virtual parameters (from Config table)
+      if (userDefs.size > 0) {
+        const userComputed = await this.computeVirtualParameters(params, userDefs);
+        Object.assign(computed, userComputed);
+      }
+
       if (Object.keys(computed).length === 0) return;
 
       const currentParams = { ...params };

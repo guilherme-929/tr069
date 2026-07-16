@@ -11,6 +11,7 @@ export class AcsService implements OnModuleInit {
   private server!: http.Server;
   private serialByIp = new Map<string, string>();
   private cachedTenantId: string | null = null;
+  private sessionLogger = new Logger('CWMP-Session');
 
   constructor(
     private prisma: PrismaService,
@@ -42,8 +43,12 @@ export class AcsService implements OnModuleInit {
     if (!await this.validateAuth(req, res)) return;
 
     let body = '';
+    const sessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const rawClientIp = req.socket?.remoteAddress || req.headers['x-forwarded-for'] as string || '';
     const clientIp = rawClientIp.replace(/^::ffff:/, '');
+    const sessionCtx = () => `[SID=${sessionId}]`;
+    const slog = (msg: string) => this.sessionLogger.log(`${sessionCtx()} ${msg}`);
+
     req.on('data', (chunk) => (body += chunk));
     req.on('end', async () => {
       try {
@@ -57,7 +62,7 @@ export class AcsService implements OnModuleInit {
           serial = this.serialByIp.get(clientIp) || serial || '';
         }
 
-        this.logger.log(`CWMP req from ${serial || 'unknown'} (ip=${clientIp}): method=${req.method}, content-type=${contentType}, bodyLen=${bodyLen}, isSoap=${isSoap}`);
+        slog(`CWMP req serial=${serial || 'unknown'} ip=${clientIp} method=${req.method} contentType=${contentType} bodyLen=${bodyLen} isSoap=${isSoap}`);
 
         if (serial && isSoap && (body.includes('<Inform>') || body.includes('<cwmp:Inform>'))) {
           this.serialByIp.set(clientIp, serial);
@@ -99,6 +104,7 @@ export class AcsService implements OnModuleInit {
         if (serial && isCommandResponse) {
           const dev = await this.prisma.device.findUnique({ where: { serial } });
           if (dev && await this.trySendNextTask(dev, res)) {
+            slog(`Next command sent to ${serial} after command response`);
             return;
           }
         }
@@ -116,12 +122,13 @@ export class AcsService implements OnModuleInit {
             const isReconnection = lastRespAt > 0 && lastRespAt < recentThreshold;
 
             if (isReconnection) {
-              this.logger.log(`Device ${serial} reconnected (DB flag, last response >5 min ago) — checking pending tasks`);
+              slog(`Device ${serial} reconnected (DB flag, last response >5 min ago) — checking pending tasks`);
               // Clear the flag so next Inform won't re-trigger
               await this.clearLastInformResponseFlag(dev);
               // Fail any IN_PROGRESS tasks from the previous session
               await this.failInProgressTasks(serial, 'Session interrupted by reconnection');
               if (await this.trySendPendingTask(dev, res)) {
+                slog(`Pending task sent to reconnected device ${serial}`);
                 return;
               }
             } else {
@@ -136,8 +143,9 @@ export class AcsService implements OnModuleInit {
           'SOAPServer': 'TR-069 ACS/1.0',
         });
         res.end(responseWithCorrectId);
+        slog(`Response sent to ${serial || 'unknown'} (${responseWithCorrectId.length} bytes)`);
       } catch (error: any) {
-        this.logger.error(`CWMP Error: ${error.message}`);
+        this.logger.error(`${sessionCtx()} CWMP Error: ${error.message}`);
         res.writeHead(500);
         res.end(`<error>${error.message}</error>`);
       }
@@ -153,10 +161,22 @@ export class AcsService implements OnModuleInit {
 
     const task = pending[0];
     const newAttempts = (task.attempts || 0) + 1;
-    if (newAttempts >= (task.maxAttempts || 5)) {
+    const maxAttempts = task.maxAttempts || 5;
+
+    // Exponential backoff: skip this attempt if within backoff window
+    if (task.updatedAt) {
+      const backoffMs = Math.min(1000 * Math.pow(2, newAttempts - 1), 300000); // max 5 min
+      const elapsed = Date.now() - new Date(task.updatedAt).getTime();
+      if (elapsed < backoffMs) {
+        this.logger.debug(`Device ${dev.serial} — task "${task.type}" in backoff (${Math.round((backoffMs - elapsed) / 1000)}s remaining), skipping`);
+        return false;
+      }
+    }
+
+    if (newAttempts >= maxAttempts) {
       await this.prisma.task.update({
         where: { id: task.id },
-        data: { status: 'FAILED', attempts: newAttempts },
+        data: { status: 'FAILED', error: `Failed after ${maxAttempts} attempts (exponential backoff exhausted)`, attempts: newAttempts },
       });
       this.logger.warn(`Device ${dev.serial} — task "${task.type}" failed after ${newAttempts} attempts`);
       return false;
@@ -167,10 +187,17 @@ export class AcsService implements OnModuleInit {
       data: { status: 'IN_PROGRESS', attempts: newAttempts },
     });
     const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
-    this.logger.log(`Device ${dev.serial} — sending command "${task.type}" (attempt ${newAttempts}/${task.maxAttempts || 5})`);
+    this.logger.log(`Device ${dev.serial} — sending command "${task.type}" (attempt ${newAttempts}/${maxAttempts})`);
     res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
     res.end(commandXml);
     return true;
+  }
+
+  private getBackoffMs(attempt: number): number {
+    const base = 1000;
+    const max = 300000;
+    const delay = Math.min(base * Math.pow(2, attempt - 1), max);
+    return delay + Math.round(Math.random() * delay * 0.1); // add 10% jitter
   }
 
   private async trySendNextTask(dev: any, res: http.ServerResponse): Promise<boolean> {
@@ -182,10 +209,22 @@ export class AcsService implements OnModuleInit {
 
     const task = remaining[0];
     const newAttempts = (task.attempts || 0) + 1;
-    if (newAttempts >= (task.maxAttempts || 5)) {
+    const maxAttempts = task.maxAttempts || 5;
+
+    // Exponential backoff: skip if within backoff window
+    if (task.updatedAt) {
+      const backoffMs = this.getBackoffMs(newAttempts);
+      const elapsed = Date.now() - new Date(task.updatedAt).getTime();
+      if (elapsed < backoffMs) {
+        this.logger.debug(`Device ${dev.serial} — task "${task.type}" in backoff (${Math.round((backoffMs - elapsed) / 1000)}s remaining), skipping`);
+        return false;
+      }
+    }
+
+    if (newAttempts >= maxAttempts) {
       await this.prisma.task.update({
         where: { id: task.id },
-        data: { status: 'FAILED', attempts: newAttempts },
+        data: { status: 'FAILED', error: `Failed after ${maxAttempts} attempts (exponential backoff exhausted)`, attempts: newAttempts },
       });
       this.logger.warn(`Device ${dev.serial} — task "${task.type}" failed after ${newAttempts} attempts`);
       return false;
@@ -195,7 +234,7 @@ export class AcsService implements OnModuleInit {
       data: { status: 'IN_PROGRESS', attempts: newAttempts },
     });
     const commandXml = await this.cwmp.buildCwmpCommand(task, dev.id);
-    this.logger.log(`Sending next command "${task.type}" to device ${dev.serial} (attempt ${newAttempts}/${task.maxAttempts || 5})`);
+    this.logger.log(`Sending next command "${task.type}" to device ${dev.serial} (attempt ${newAttempts}/${maxAttempts})`);
     res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
     res.end(commandXml);
     return true;
@@ -324,7 +363,7 @@ export class AcsService implements OnModuleInit {
       || `http://${device.ipAddress || 'localhost'}:${process.env.ACS_PORT || '7547'}`;
   }
 
-  async sendConnectionRequest(deviceId: string): Promise<{ success: boolean; message: string }> {
+  async sendConnectionRequest(deviceId: string): Promise<{ success: boolean; message: string; statusCode?: number; executedImmediately?: boolean; queued?: boolean }> {
     const device = await this.prisma.device.findUnique({
       where: { id: deviceId },
       include: { tenant: true },
@@ -367,9 +406,19 @@ export class AcsService implements OnModuleInit {
 
       const req = client.request(options, (res) => {
         this.logger.log(`ConnectionRequest to ${targetUrl} responded with ${res.statusCode}`);
+        const statusCode = res.statusCode!;
+        const is200 = statusCode === 200;
+        const is202 = statusCode === 202;
         resolve({
-          success: res.statusCode! < 500,
-          message: `Connection request sent. Response: ${res.statusCode} ${res.statusMessage}`,
+          success: statusCode < 500,
+          statusCode,
+          executedImmediately: is200,
+          queued: is202,
+          message: is200
+            ? `Connection request executed immediately (200): device will process tasks now`
+            : is202
+              ? `Connection request queued (202): device will process on next scheduled Inform`
+              : `Connection request sent. Response: ${statusCode} ${res.statusMessage}`,
         });
       });
 
