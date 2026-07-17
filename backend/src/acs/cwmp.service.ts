@@ -701,9 +701,9 @@ export class CwmpService {
     const tc = data?.['cwmp:TransferComplete'] || data?.TransferComplete;
     if (!tc) return this.buildEmptySoapEnvelope();
 
-    const commandKey = tc?.CommandKey || '';
-    const fault = tc?.Fault || { FaultCode: '0', FaultString: '' };
-    const faultCode = fault?.FaultCode || '0';
+    const commandKey = tc?.CommandKey || tc?.['cwmp:CommandKey'] || '';
+    const fault = tc?.Fault || tc?.['cwmp:Fault'] || { FaultCode: '0', FaultString: '' };
+    const faultCode = fault?.FaultCode || fault?.['cwmp:FaultCode'] || '0';
 
     this.logger.log(`[CWMP-EVENT] TransferComplete: commandKey=${commandKey}, faultCode=${faultCode}, faultString=${fault?.FaultString || ''}`);
 
@@ -753,17 +753,23 @@ export class CwmpService {
 
   private async handleGetParameterValuesResponse(data: any): Promise<string> {
     const response = data?.['cwmp:GetParameterValuesResponse'] || data?.GetParameterValuesResponse;
-    const paramList = response?.ParameterList?.ParameterValueStruct || [];
+    const paramList = response?.ParameterList?.['cwmp:ParameterValueStruct']
+      || response?.['cwmp:ParameterList']?.['cwmp:ParameterValueStruct']
+      || response?.['cwmp:ParameterList']?.ParameterValueStruct
+      || response?.ParameterList?.ParameterValueStruct
+      || [];
     const params = Array.isArray(paramList) ? paramList : [paramList];
 
     const paramMap: Record<string, string> = {};
     for (const p of params) {
-      if (p.Name) {
-        paramMap[p.Name] = (p.Value && typeof p.Value === 'object' && !('#text' in p.Value)) ? '(hidden)' : (p.Value?.['#text'] ?? p.Value ?? '');
+      const pName = p.Name || p['cwmp:Name'] || '';
+      if (pName) {
+        const pValue = (p.Value || p['cwmp:Value']);
+        paramMap[pName] = (pValue && typeof pValue === 'object' && !('#text' in pValue)) ? '(hidden)' : (pValue?.['#text'] ?? pValue ?? '');
       }
     }
 
-    this.logger.log(`[GPV-RESP] lastSerial=${this.lastSerial} names=${Object.keys(paramMap).join('|') || '(empty/Fault)'} cmdKey=${response?.CommandKey || '-'} fault=${data?.['soap:Fault'] ? JSON.stringify(data['soap:Fault']).slice(0,200) : (data?.Fault ? JSON.stringify(data.Fault).slice(0,200) : 'none')}`);
+    this.logger.log(`[GPV-RESP] lastSerial=${this.lastSerial} names=${Object.keys(paramMap).join('|') || '(empty/Fault)'} cmdKey=${response?.CommandKey || response?.['cwmp:CommandKey'] || '-'} fault=${data?.['soap:Fault'] ? JSON.stringify(data['soap:Fault']).slice(0,200) : (data?.Fault ? JSON.stringify(data.Fault).slice(0,200) : 'none')}`);
 
     if (Object.keys(paramMap).length === 0 || !this.lastSerial) return this.buildEmptySoapEnvelope();
 
@@ -844,14 +850,26 @@ export class CwmpService {
 
   private async handleSetParameterValuesResponse(data: any): Promise<string> {
     const response = data?.['cwmp:SetParameterValuesResponse'] || data?.SetParameterValuesResponse;
-    const paramKey = response?.ParameterKey || '';
-    const status = response?.Status ?? 0;
+    const paramKey = response?.ParameterKey || response?.['cwmp:ParameterKey'] || '';
+    const status = response?.Status ?? response?.['cwmp:Status'] ?? 0;
 
     if (paramKey) {
       await this.prisma.task.updateMany({
         where: { id: paramKey },
         data: { status: status === 0 ? 'COMPLETED' : 'FAILED' },
       });
+    } else {
+      // Fallback: if no ParameterKey, try matching by deviceId + type + status
+      // to handle CPEs that omit ParameterKey in the response
+      const device = this.lastSerial
+        ? await this.prisma.device.findUnique({ where: { serial: this.lastSerial } })
+        : null;
+      if (device) {
+        await this.prisma.task.updateMany({
+          where: { deviceId: device.id, type: { in: ['SetParameterValues', 'Provision'] }, status: 'IN_PROGRESS' },
+          data: { status: status === 0 ? 'COMPLETED' : 'FAILED' },
+        });
+      }
     }
 
     return this.buildEmptySoapEnvelope();
@@ -861,9 +879,13 @@ export class CwmpService {
     const response = data?.['cwmp:GetParameterNamesResponse'] || data?.GetParameterNamesResponse;
     if (!response || !this.lastSerial) return this.buildEmptySoapEnvelope();
 
-    const paramList = response?.ParameterList?.ParameterInfoStruct || [];
+    const paramList = response?.ParameterList?.['cwmp:ParameterInfoStruct']
+      || response?.['cwmp:ParameterList']?.['cwmp:ParameterInfoStruct']
+      || response?.['cwmp:ParameterList']?.ParameterInfoStruct
+      || response?.ParameterList?.ParameterInfoStruct
+      || [];
     const params = Array.isArray(paramList) ? paramList : [paramList];
-    this.logger.log(`[GPN-RESP] lastSerial=${this.lastSerial} names=${params.map((p:any)=>p.Name).join('|').slice(0,400)}`);
+    this.logger.log(`[GPN-RESP] lastSerial=${this.lastSerial} names=${params.map((p:any)=>p.Name || p['cwmp:Name'] || '').join('|').slice(0,400)}`);
 
     const device = await this.prisma.device.findUnique({
       where: { serial: this.lastSerial },
@@ -876,8 +898,8 @@ export class CwmpService {
     const leafParams: string[] = [];
 
     for (const p of params) {
-      const name = p.Name || '';
-      const writable = p.Writable === true || p.Writable === 'true';
+      const name = p.Name || p['cwmp:Name'] || '';
+      const writable = p.Writable === true || p.Writable === 'true' || p['cwmp:Writable'] === true || p['cwmp:Writable'] === 'true';
       if (!name) continue;
 
       // Parameters ending with '.' are objects (containers)

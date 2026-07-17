@@ -382,6 +382,19 @@ export class AcsService implements OnModuleInit {
 
     const dev = await this.prisma.device.findUnique({ where: { serial } });
     if (dev) {
+      // Reset any stale IN_PROGRESS tasks back to PENDING so they can be retried
+      // CPE is sending empty POST = asking for next command = session is alive
+      const staleInProgress = await this.prisma.task.findMany({
+        where: { deviceId: dev.id, status: 'IN_PROGRESS' },
+      });
+      for (const t of staleInProgress) {
+        await this.prisma.task.update({
+          where: { id: t.id },
+          data: { status: 'PENDING' },
+        });
+        this.logger.warn(`Task "${t.type}" (${t.id}) reset PENDING — CPE reconnected via empty POST`);
+      }
+
       const pendingTasks = await this.prisma.task.findMany({
         where: { deviceId: dev.id, status: 'PENDING' },
         orderBy: { createdAt: 'asc' },
