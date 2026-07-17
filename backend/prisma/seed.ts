@@ -60,6 +60,8 @@ async function main() {
     { manufacturer: 'Nokia', name: 'G-240W-B', hwVersion: 'v3.1', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
     { manufacturer: 'Intelbras', name: 'RG1200', hwVersion: 'v1.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
     { manufacturer: 'TP-Link', name: 'Archer AX55', hwVersion: 'v1.2.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'TP-Link', name: 'XC220-g3', hwVersion: 'v1.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
+    { manufacturer: 'TP-Link', name: 'XX530v', hwVersion: 'v1.0', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
     { manufacturer: 'FiberHome', name: 'HG6245D', hwVersion: 'v2.1', dataModel: 'TR-181', defaultParameters: { 'Device.ManagementServer.URL': 'http://acs.local:7547/cwmp', 'Device.ManagementServer.PeriodicInformInterval': '300' } },
   ];
 

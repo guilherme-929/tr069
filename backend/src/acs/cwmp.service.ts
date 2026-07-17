@@ -1197,6 +1197,9 @@ export class CwmpService {
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
     const isTPLink = (device.manufacturer || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('xc220')
+      || (device.modelName || '').toLowerCase().includes('xx530')
       || Object.keys(currentParams).some((k) => k.includes('X_TP_'));
     // Default to the TR-098 WLANConfiguration.* namespace (the spec standard
     // that this ZTE fleet implements). Only use WIFI.* / Device.WiFi.* when the
@@ -1317,6 +1320,9 @@ export class CwmpService {
     const instHasZTE = checkInstance('InternetGatewayDevice.LANDevice.1.WIFI.SSID.{i}.');
     const instHasTR181 = checkInstance('Device.WiFi.SSID.{i}.');
     const isTPLink = (device.manufacturer || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('xc220')
+      || (device.modelName || '').toLowerCase().includes('xx530')
       || Object.keys(currentParams).some((k) => k.includes('X_TP_'));
 
     let wifiParams: { name: string; value: string }[];
@@ -1451,6 +1457,9 @@ export class CwmpService {
 
     // Detect TP-Link by manufacturer or X_TP_ vendor params
     const isTPLink = (device.manufacturer || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('xc220')
+      || (device.modelName || '').toLowerCase().includes('xx530')
       || allKnownKeys.some((k) => k.includes('X_TP_'));
 
     // When both TR-181 and TR-098 are detected, count SSID instances to
@@ -1485,6 +1494,11 @@ export class CwmpService {
 
     const isZTE = (device.manufacturer || '').toLowerCase().includes('zte')
       || allKnownKeys.some((k) => k.includes('X_ZTE-COM_'));
+
+    // TP-Link expõe instâncias 1-4 (2.4GHz) e 5+ (5GHz), enquanto outros
+    // fabricantes normalmente têm 2-3 instâncias. Aumentar o limite para
+    // TP-Link garante que ambas as bandas sejam lidas.
+    const maxTR181Instances = isTPLink ? 8 : 4;
 
     for (const i of instances) {
       essentialPathsByInstance[i] = [];
@@ -1536,29 +1550,33 @@ export class CwmpService {
           );
         }
       }
-      if (useTR181 && i <= 4) {
-        essentialPathsByInstance[i].push(
+      if (useTR181 && i <= maxTR181Instances) {
+        const essential = [
           `Device.WiFi.SSID.${i}.SSID`,
           `Device.WiFi.SSID.${i}.Enable`,
           `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
           `Device.WiFi.AccessPoint.${i}.AssociatedDeviceNumberOfEntries`,
-        );
-        // TP-Link vendor-specific WiFi password path
+        ];
+        // TP-Link CPEs (XC220-g3, XX530v) armazenam a senha WiFi em
+        // X_TP_PreSharedKey. Incluir como essential (não vendor-only)
+        // para garantir que seja lida junto com os demais parâmetros.
         if (isTPLink) {
-          vendorPathsByInstance[i].push(
+          essential.push(
             `Device.WiFi.AccessPoint.${i}.Security.X_TP_PreSharedKey`,
           );
         }
-      } else if (useTR181 && i > 4) {
-        // Skip additional instances to avoid oversized GetParameterValues.
-        // TP-Link XX530v exposes 16 SSIDs but we only need the main ones.
-        this.logger.debug(`[WIFI] Skipping TR-181 instance ${i} — only reading 1-4`);
+        essentialPathsByInstance[i] = essential;
+      } else if (useTR181 && i > maxTR181Instances) {
+        // Pular instâncias excedentes para evitar GetParameterValues muito
+        // grandes. TP-Link expõe até 16 SSIDs; lemos até maxTR181Instances.
+        this.logger.debug(`[WIFI] Skipping TR-181 instance ${i} — limit ${maxTR181Instances}`);
       }
     }
 
-    // For TR-181 with many instances, limit to the first 4 to avoid oversized requests
-    if (useTR181 && instances.length > 4) {
-      this.logger.log(`[WIFI] Limiting TR-181 instances from ${instances.length} to 4 for device ${device.serial}`);
+    // For TR-181 with many instances, limit reading to avoid oversized requests.
+    // TP-Link CPEs may have 16 instances but we cap at maxTR181Instances.
+    if (useTR181 && instances.length > maxTR181Instances) {
+      this.logger.log(`[WIFI] Limiting TR-181 instances from ${instances.length} to ${maxTR181Instances} for device ${device.serial}`);
     }
 
     // Check cache completeness using only essential paths (SSID, KeyPassphrase,

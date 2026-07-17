@@ -88,7 +88,7 @@ export class ProvisioningService {
     const hasInstance5 = leaves.some(function(l) { return l.includes('WLANConfiguration.5.'); })
       || parameters['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID'] !== undefined;
     if (hasInstance5) {
-      this.logger.log('[WIFI-5G] Instance 5 detected for ' + deviceModelName + ' � using it as 5GHz');
+      this.logger.log('[WIFI-5G] Instance 5 detected for ' + deviceModelName + ' � using it as 5GHz');
       return 5;
     }
 
@@ -157,6 +157,11 @@ export class ProvisioningService {
     const ssid5g = wifiConfig.ssid5g || wifiConfig.ssid;
     const pass5g = wifiConfig.password5g || wifiConfig.password;
 
+    const isTPLink = (device.model?.manufacturer || device.modelName || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('tp-link')
+      || (device.modelName || '').toLowerCase().includes('xc220')
+      || (device.modelName || '').toLowerCase().includes('xx530');
+
     if (ssid2g && pass2g) {
       if (!dataModel || dataModel === 'TR-098') {
         paramsWithCr['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID'] = ssid2g;
@@ -165,6 +170,10 @@ export class ProvisioningService {
       if (!dataModel || dataModel === 'TR-181') {
         paramsWithCr['Device.WiFi.SSID.1.SSID'] = ssid2g;
         paramsWithCr['Device.WiFi.AccessPoint.1.Security.KeyPassphrase'] = pass2g;
+        // TP-Link: X_TP_PreSharedKey é obrigatório para alguns firmwares
+        if (isTPLink) {
+          paramsWithCr['Device.WiFi.AccessPoint.1.Security.X_TP_PreSharedKey'] = pass2g;
+        }
       }
     }
 
@@ -179,6 +188,9 @@ export class ProvisioningService {
       if (!dataModel || dataModel === 'TR-181') {
         paramsWithCr['Device.WiFi.SSID.' + inst5g + '.SSID'] = ssid5g;
         paramsWithCr['Device.WiFi.AccessPoint.' + inst5g + '.Security.KeyPassphrase'] = pass5g;
+        if (isTPLink) {
+          paramsWithCr['Device.WiFi.AccessPoint.' + inst5g + '.Security.X_TP_PreSharedKey'] = pass5g;
+        }
       }
     }
 

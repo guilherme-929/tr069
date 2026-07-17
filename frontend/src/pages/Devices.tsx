@@ -332,6 +332,7 @@ export default function Devices() {
                           || '';
                         const pw = data.params['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase']
                           || data.params['Device.WiFi.AccessPoint.1.Security.KeyPassphrase']
+                          || data.params['Device.WiFi.AccessPoint.1.Security.X_TP_PreSharedKey']
                           || '';
                         setTimeout(() => {
                           const ssidEl = document.getElementById('wifi-ssid') as HTMLInputElement;
@@ -477,9 +478,10 @@ className={`px-2.5 py-3 whitespace-nowrap text-[11px] font-bold uppercase border
                             `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.SSID`,
                             `Device.WiFi.SSID.${i}.SSID`);
                           const pass = get(i,
-                            `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.KeyPassphrase`,
-                            `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Security.KeyPassphrase`,
-                            `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`);
+                             `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.KeyPassphrase`,
+                             `InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${i}.Security.KeyPassphrase`,
+                             `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
+                             `Device.WiFi.AccessPoint.${i}.Security.X_TP_PreSharedKey`);
                           const ch = get(i,
                             `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${i}.Channel`,
                             `InternetGatewayDevice.LANDevice.1.WIFI.SSID.${i}.Channel`);
