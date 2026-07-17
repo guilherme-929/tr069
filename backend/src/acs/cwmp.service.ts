@@ -1391,6 +1391,14 @@ export class CwmpService {
     const unsupported = new Set((model?.unsupportedParameters as string[]) || []);
     const filterUnsupported = (paths: string[]) => paths.filter((p) => !unsupported.has(p));
 
+    // Model-specific read overrides from DeviceModel.defaultParameters.
+    // Fabricantes podem definir parâmetros adicionais de leitura específicos
+    // do modelo, ex: { "readOverrides": { "prefix": "Device.WiFi.AccessPoint.{i}.Security.X_TP_PreSharedKey" } }
+    const modelDefaults = (model?.defaultParameters as Record<string, any>) || {};
+    const modelReadOverrides: string[] = Array.isArray(modelDefaults.readOverrides)
+      ? modelDefaults.readOverrides
+      : [];
+
     // Rate limit: max 20 pending tasks per device to avoid queue overload
     const pendingTaskCount = await this.prisma.task.count({
       where: { deviceId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
@@ -1566,6 +1574,10 @@ export class CwmpService {
           );
         }
         essentialPathsByInstance[i] = essential;
+        // Aplica readOverrides do modelo (ex: paths vendor específicos)
+        for (const override of modelReadOverrides) {
+          essentialPathsByInstance[i].push(override.replace('{i}', String(i)));
+        }
       } else if (useTR181 && i > maxTR181Instances) {
         // Pular instâncias excedentes para evitar GetParameterValues muito
         // grandes. TP-Link expõe até 16 SSIDs; lemos até maxTR181Instances.

@@ -20,14 +20,15 @@ export class TasksMaintenanceService {
   async resetStuckTasks(): Promise<{ reset: number; failed: number }> {
     const cutoff = new Date(Date.now() - TasksMaintenanceService.STUCK_THRESHOLD_MS);
 
-    const stuck = await this.prisma.task.findMany({
+    // Handle IN_PROGRESS tasks that timed out (CPE never responded)
+    const stuckInProgress = await this.prisma.task.findMany({
       where: { status: 'IN_PROGRESS', updatedAt: { lt: cutoff } },
     });
 
     let reset = 0;
     let failed = 0;
 
-    for (const task of stuck) {
+    for (const task of stuckInProgress) {
       if (task.attempts + 1 >= task.maxAttempts) {
         await this.prisma.task.update({
           where: { id: task.id },
@@ -42,6 +43,28 @@ export class TasksMaintenanceService {
         reset++;
       }
     }
+
+    // Handle PENDING tasks for devices that haven't connected recently.
+    // If a device is OFFLINE and has PENDING tasks older than the threshold,
+    // fail them to avoid stale tasks blocking the queue.
+    const recentCutoff = new Date(Date.now() - TasksMaintenanceService.STUCK_THRESHOLD_MS);
+    const stalePending = await this.prisma.task.findMany({
+      where: {
+        status: 'PENDING',
+        createdAt: { lt: recentCutoff },
+        device: { lastInform: { lt: recentCutoff } },
+      },
+      include: { device: true },
+    });
+
+    for (const task of stalePending) {
+      await this.prisma.task.update({
+        where: { id: task.id },
+        data: { status: 'FAILED', error: 'Device offline — task abandoned after timeout' },
+      });
+      failed++;
+    }
+
     return { reset, failed };
   }
 
