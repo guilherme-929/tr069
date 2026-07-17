@@ -799,7 +799,16 @@ export class CwmpService {
       for (const [key, val] of Object.entries(paramMap)) {
         updatedParams[key] = val;
       }
-      updatedParams.__discovered__ = { ...discovered, _values: updatedValues };
+
+      // Store vendor-specific param values separately for provisioning decisions
+      const vendorValues: Record<string, string> = {};
+      for (const [key, val] of Object.entries(paramMap)) {
+        if (key.includes('.X_')) vendorValues[key] = val;
+      }
+      const existingVendorValues = (discovered._vendorValues || {}) as Record<string, string>;
+      const mergedVendorValues = { ...existingVendorValues, ...vendorValues };
+
+      updatedParams.__discovered__ = { ...discovered, _values: updatedValues, _vendorValues: mergedVendorValues };
 
       let connectionRequestUrl = paramMap['InternetGatewayDevice.ManagementServer.ConnectionRequestURL']
         || paramMap['Device.ManagementServer.ConnectionRequestURL'];
@@ -927,6 +936,29 @@ export class CwmpService {
     discovered._objects = [...new Set([...(discovered._objects || []), ...objectsToExplore])];
     discovered._leaves = [...new Set([...(discovered._leaves || []), ...leafParams])];
     discovered._writable = { ...(discovered._writable || {}), ...Object.fromEntries(params.filter((p: any) => p.Writable).map((p: any) => [p.Name, true])) };
+
+    // Extract vendor-specific (X_ prefixed) leaf params and group by vendor prefix.
+    // This enables model-specific provisioning without hardcoded vendor checks.
+    // Common vendor prefixes: X_TP_, X_ZTE-COM_, X_CT-COM_, X_HW_, X_SRTC-_, etc.
+    const vendorLeaves = leafParams.filter((n) => n.includes('.X_'));
+    const vendorGroups: Record<string, string[]> = {};
+    for (const v of vendorLeaves) {
+      const match = v.match(/\.(X_\w+?)\./);
+      const prefix = match ? match[1] : 'X_OTHER';
+      if (!vendorGroups[prefix]) vendorGroups[prefix] = [];
+      vendorGroups[prefix].push(v);
+    }
+    const existingVendor = (discovered._vendor || {}) as Record<string, string[]>;
+    for (const [prefix, paths] of Object.entries(vendorGroups)) {
+      existingVendor[prefix] = [...new Set([...(existingVendor[prefix] || []), ...paths])];
+    }
+    discovered._vendor = existingVendor;
+
+    // Log vendor namespaces found for debugging
+    const vendorPrefixes = Object.keys(vendorGroups);
+    if (vendorPrefixes.length > 0) {
+      this.logger.log(`[DISCOVERY] Vendor params found for ${device.serial}: ${vendorPrefixes.join(', ')} (${vendorLeaves.length} leaves)`);
+    }
 
     // Fetch values for discovered leaf params
     if (leafParams.length > 0) {
@@ -1164,6 +1196,8 @@ export class CwmpService {
     const hasZTE = Object.keys(currentParams).some((k) =>
       k.startsWith('InternetGatewayDevice.LANDevice.1.WIFI.'),
     );
+    const isTPLink = (device.manufacturer || '').toLowerCase().includes('tp-link')
+      || Object.keys(currentParams).some((k) => k.includes('X_TP_'));
     // Default to the TR-098 WLANConfiguration.* namespace (the spec standard
     // that this ZTE fleet implements). Only use WIFI.* / Device.WiFi.* when the
     // cache already confirms the CPE exposes those namespaces, otherwise the
@@ -1192,6 +1226,9 @@ export class CwmpService {
         { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
         { name: `Device.WiFi.SSID.${instance}.Enable`, value: '1' },
         { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
+        // TP-Link CPEs (XX530v etc.) reject KeyPassphrase on some firmware
+        // versions — set X_TP_PreSharedKey as the vendor-specific equivalent.
+        ...(isTPLink ? [{ name: `Device.WiFi.AccessPoint.${instance}.Security.X_TP_PreSharedKey`, value: params.password }] : []),
         { name: `Device.WiFi.AccessPoint.${instance}.SSID`, value: params.ssid },
         { name: `Device.WiFi.AccessPoint.${instance}.Enable`, value: '1' },
       ];
@@ -1217,6 +1254,7 @@ export class CwmpService {
         wifiParams = [
           { name: `Device.WiFi.SSID.${instance}.SSID`, value: params.ssid },
           { name: `Device.WiFi.AccessPoint.${instance}.Security.KeyPassphrase`, value: params.password },
+          ...(isTPLink ? [{ name: `Device.WiFi.AccessPoint.${instance}.Security.X_TP_PreSharedKey`, value: params.password }] : []),
         ];
       } else {
         wifiParams = [
@@ -1278,6 +1316,8 @@ export class CwmpService {
     const instHasWLAN = checkInstance('InternetGatewayDevice.LANDevice.1.WLANConfiguration.{i}.');
     const instHasZTE = checkInstance('InternetGatewayDevice.LANDevice.1.WIFI.SSID.{i}.');
     const instHasTR181 = checkInstance('Device.WiFi.SSID.{i}.');
+    const isTPLink = (device.manufacturer || '').toLowerCase().includes('tp-link')
+      || Object.keys(currentParams).some((k) => k.includes('X_TP_'));
 
     let wifiParams: { name: string; value: string }[];
     if (instHasZTE) {
@@ -1503,6 +1543,12 @@ export class CwmpService {
           `Device.WiFi.AccessPoint.${i}.Security.KeyPassphrase`,
           `Device.WiFi.AccessPoint.${i}.AssociatedDeviceNumberOfEntries`,
         );
+        // TP-Link vendor-specific WiFi password path
+        if (isTPLink) {
+          vendorPathsByInstance[i].push(
+            `Device.WiFi.AccessPoint.${i}.Security.X_TP_PreSharedKey`,
+          );
+        }
       } else if (useTR181 && i > 4) {
         // Skip additional instances to avoid oversized GetParameterValues.
         // TP-Link XX530v exposes 16 SSIDs but we only need the main ones.
