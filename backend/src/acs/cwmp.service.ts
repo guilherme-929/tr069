@@ -194,8 +194,19 @@ export class CwmpService {
                     await this.markPathUnsupported(device.modelId, payload.names[0]);
                   }
                 }
-                if ((ft.type === 'SetParameterValues' || ft.type === 'Provision') && payload.parameters) {
-                  const paramKeys = Object.keys(payload.parameters);
+                if (ft.type === 'SetParameterValues' || ft.type === 'Provision') {
+                  // Normalize to { path: value } format regardless of payload structure
+                  let paramMap: Record<string, string> = {};
+                  if (payload.parameters) {
+                    paramMap = { ...payload.parameters };
+                  } else if (payload.params && Array.isArray(payload.params)) {
+                    // createSetParamTask uses payload.params: [{ name, value }]
+                    for (const p of payload.params) {
+                      if (p.name) paramMap[p.name] = String(p.value ?? '');
+                    }
+                  }
+
+                  const paramKeys = Object.keys(paramMap);
                   if (paramKeys.length > 1) {
                     const half = Math.ceil(paramKeys.length / 2);
                     const split1 = paramKeys.slice(0, half);
@@ -203,7 +214,7 @@ export class CwmpService {
                     this.logger.warn(`[FAULT-9005] Splitting ${ft.type} task ${ft.id}: ${paramKeys.length} params -> ${split1.length} + ${split2.length}`);
                     for (const chunk of [split1, split2]) {
                       const chunkParams: Record<string, string> = {};
-                      for (const k of chunk) chunkParams[k] = payload.parameters[k];
+                      for (const k of chunk) chunkParams[k] = paramMap[k];
                       await this.prisma.task.create({
                         data: {
                           deviceId: device.id,

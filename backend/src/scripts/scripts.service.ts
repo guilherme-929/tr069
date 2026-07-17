@@ -332,6 +332,22 @@ export class ScriptsService {
       }
     }
 
+    // Skip if path namespace doesn't match the device's data model
+    const deviceParams = (device.parameters as Record<string, any>) || {};
+    const hasTR181 = Object.keys(deviceParams).some(k => k.startsWith('Device.'));
+    const hasTR098 = Object.keys(deviceParams).some(k => k.startsWith('InternetGatewayDevice.'));
+    const isTR181Path = path.startsWith('Device.');
+    const isTR098Path = path.startsWith('InternetGatewayDevice.');
+
+    if (hasTR181 && !hasTR098 && isTR098Path) {
+      this.logger.warn(`[createSetParamTask] Skipping TR-098 path "${path}" for TR-181 device ${device.serial} (model: ${model?.name || 'unknown'})`);
+      return;
+    }
+    if (hasTR098 && !hasTR181 && isTR181Path) {
+      this.logger.warn(`[createSetParamTask] Skipping TR-181 path "${path}" for TR-098 device ${device.serial} (model: ${model?.name || 'unknown'})`);
+      return;
+    }
+
     const existingPending = await this.prisma.task.count({
       where: { deviceId, status: 'PENDING', type: 'SetParameterValues' },
     });
