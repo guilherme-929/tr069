@@ -268,11 +268,32 @@ export class DevicesService {
         'InternetGatewayDevice.ManagementServer.ConnectionRequestURL',
       ],
     },
+    'WifiPass24': {
+      label: 'WiFi Password (2.4GHz)',
+      paths: [
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase',
+        'Device.WiFi.AccessPoint.1.Security.KeyPassphrase',
+        'Device.WiFi.AccessPoint.1.Security.X_TP_PreSharedKey',
+        'InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.1.Security.KeyPassphrase',
+      ],
+    },
+    'WifiPass5': {
+      label: 'WiFi Password (5GHz)',
+      paths: [
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase',
+        'Device.WiFi.AccessPoint.2.Security.KeyPassphrase',
+        'Device.WiFi.AccessPoint.2.Security.X_TP_PreSharedKey',
+        'InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.2.Security.KeyPassphrase',
+      ],
+    },
     'ConnectedDevices24': {
       label: 'Connected Devices (2.4GHz)',
       paths: [
         'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.TotalAssociations',
         'Device.WiFi.AccessPoint.1.AssociatedDeviceNumberOfEntries',
+        'Device.WiFi.AccessPoint.3.AssociatedDeviceNumberOfEntries',
+        'Device.WiFi.AccessPoint.5.AssociatedDeviceNumberOfEntries',
+        'Device.WiFi.AccessPoint.7.AssociatedDeviceNumberOfEntries',
       ],
     },
     'ConnectedDevices5': {
@@ -280,6 +301,10 @@ export class DevicesService {
       paths: [
         'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.TotalAssociations',
         'Device.WiFi.AccessPoint.2.AssociatedDeviceNumberOfEntries',
+        'Device.WiFi.AccessPoint.4.AssociatedDeviceNumberOfEntries',
+        'Device.WiFi.AccessPoint.6.AssociatedDeviceNumberOfEntries',
+        'Device.WiFi.AccessPoint.8.AssociatedDeviceNumberOfEntries',
+        'Device.WiFi.AccessPoint.10.AssociatedDeviceNumberOfEntries',
       ],
     },
   };

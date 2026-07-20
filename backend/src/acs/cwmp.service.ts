@@ -969,7 +969,7 @@ export class CwmpService {
       });
 
       // Chunk into small batches to avoid Fault 9814 on strict CPEs (TP-Link etc.)
-      const GPV_CHUNK_SIZE = 10;
+      const GPV_CHUNK_SIZE = 20;
       for (let i = 0; i < leafParams.length; i += GPV_CHUNK_SIZE) {
         const chunk = leafParams.slice(i, i + GPV_CHUNK_SIZE);
         const existingPending = await this.prisma.task.count({
@@ -1470,6 +1470,10 @@ export class CwmpService {
       || (device.modelName || '').toLowerCase().includes('xx530')
       || allKnownKeys.some((k) => k.includes('X_TP_'));
 
+    // Detect ZTE by manufacturer or X_ZTE-COM_ vendor params
+    const isZTE = (device.manufacturer || '').toLowerCase().includes('zte')
+      || allKnownKeys.some((k) => k.includes('X_ZTE-COM_'));
+
     // When both TR-181 and TR-098 are detected, count SSID instances to
     // determine which namespace actually exposes the WiFi interfaces.
     // TP-Link has 16 SSID instances under TR-181 vs ~2 under TR-098.
@@ -1483,14 +1487,29 @@ export class CwmpService {
       || (hasTR181 && tr181SSIDCount > tr098SSIDCount)
       || (hasTR181 && !hasWLAN);
 
-    // When no WiFi namespace is detected from discovery/cache, fall back to
-    // TR-181 Device.WiFi.* paths as the most common standard. This covers
-    // CPEs like TP-Link that don't expose WiFi in GetParameterNames but may
-    // still respond to GetParameterValues for standard data model paths.
+    // When no WiFi namespace is detected from discovery/cache, fall back
+    // conforme o fabricante: ZTE → TR-098 (WLANConfiguration), outros →
+    // TR-181 (Device.WiFi.*). Isso evita Fault 9005 em ZTEs cujo discovery
+    // ainda não completou.
     const noneDetected = !hasWLAN && !hasZTE && !hasTR181 && instances.length > 0;
-    const useTR181 = prefersTR181 || noneDetected;
-    const useWLAN = hasWLAN && !useTR181;
-    const useZTE = !useWLAN && !useTR181 && hasZTE;
+    let useTR181: boolean;
+    let useWLAN: boolean;
+    let useZTE: boolean;
+    if (isZTE && noneDetected) {
+      // ZTE sem namespace detectado: fallback seguro para TR-098
+      useTR181 = false;
+      useWLAN = true;
+      useZTE = false;
+    } else if (!isZTE && noneDetected) {
+      // Non-ZTE (ex: TP-Link) sem namespace: fallback TR-181
+      useTR181 = true;
+      useWLAN = false;
+      useZTE = false;
+    } else {
+      useTR181 = prefersTR181;
+      useWLAN = hasWLAN && !useTR181;
+      useZTE = !useWLAN && !useTR181 && hasZTE;
+    }
 
     // Build the essential paths per instance (standard CWMP params that all
     // TR-098 CPEs support). These are safe to query and rarely fault.
@@ -1499,9 +1518,6 @@ export class CwmpService {
     const vendorPathsByInstance: Record<number, string[]> = {};
     // Associated device entries (MAC, IP, name).
     const hostPathsByInstance: Record<number, string[]> = {};
-
-    const isZTE = (device.manufacturer || '').toLowerCase().includes('zte')
-      || allKnownKeys.some((k) => k.includes('X_ZTE-COM_'));
 
     // TP-Link expõe instâncias 1-4 (2.4GHz) e 5+ (5GHz), enquanto outros
     // fabricantes normalmente têm 2-3 instâncias. Aumentar o limite para
@@ -1578,6 +1594,22 @@ export class CwmpService {
         for (const override of modelReadOverrides) {
           essentialPathsByInstance[i].push(override.replace('{i}', String(i)));
         }
+        // Hosts paths para TR-181 (AssociatedDevice) — necessário para
+        // TP-Link e outros CPEs que usam Device.WiFi.AccessPoint.{i}.
+        const apEntryCount = parseInt(
+          params[`Device.WiFi.AccessPoint.${i}.AssociatedDeviceNumberOfEntries`] || '',
+          10,
+        );
+        const maxTR181Hosts = Number.isFinite(apEntryCount) && apEntryCount > 0 ? apEntryCount : 4;
+        for (let c = 1; c <= maxTR181Hosts; c++) {
+          hostPathsByInstance[i].push(
+            `Device.WiFi.AccessPoint.${i}.AssociatedDevice.${c}.AssociatedDeviceMACAddress`,
+            `Device.WiFi.AccessPoint.${i}.AssociatedDevice.${c}.AssociatedDeviceIPAddress`,
+            ...(isTPLink ? [
+              `Device.WiFi.AccessPoint.${i}.AssociatedDevice.${c}.X_TP_HostName`,
+            ] : []),
+          );
+        }
       } else if (useTR181 && i > maxTR181Instances) {
         // Pular instâncias excedentes para evitar GetParameterValues muito
         // grandes. TP-Link expõe até 16 SSIDs; lemos até maxTR181Instances.
@@ -1627,8 +1659,14 @@ export class CwmpService {
           || existingParams[`Device.WiFi.SSID.${idx}.Enable`]
           || existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.SSID.${idx}.Enable`];
         const assoc = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.TotalAssociations`];
+        const pw_wlan = existingParams[`InternetGatewayDevice.LANDevice.1.WLANConfiguration.${idx}.KeyPassphrase`];
+        const pw_tr181 = existingParams[`Device.WiFi.AccessPoint.${idx}.Security.KeyPassphrase`];
+        const pw_tp = existingParams[`Device.WiFi.AccessPoint.${idx}.Security.X_TP_PreSharedKey`];
+        const pw_zte = existingParams[`InternetGatewayDevice.LANDevice.1.WIFI.AccessPoint.${idx}.Security.KeyPassphrase`];
+        const hasPassword = !!(pw_wlan || pw_tr181 || pw_tp || pw_zte);
         const missing = !ssid || ch === undefined || en === undefined
-          || (en === '1' && assoc === undefined);
+          || (en === '1' && assoc === undefined)
+          || (en === '1' && !hasPassword);
         if (missing) {
           cacheComplete = false;
           break;
@@ -1718,22 +1756,26 @@ export class CwmpService {
     }
 
     // If no tasks were queued and no WiFi namespace was detected, try to
-    // discover the Device.WiFi.* subtree via targeted GetParameterNames.
+    // discover the correct subtree via targeted GetParameterNames.
     // Some CPEs (notably TP-Link) don't expose WiFi in the initial broad
     // discovery but respond to a focused scan.
+    // ZTE precisa de InternetGatewayDevice.LANDevice.1. para expor WLAN/WIFI.
     if (taskCount === 0 && !hasWLAN && !hasZTE && !hasTR181) {
+      const discoveryPath = isZTE
+        ? 'InternetGatewayDevice.LANDevice.1.'
+        : 'Device.WiFi.';
       const discTask = await this.prisma.task.create({
         data: {
           deviceId,
           type: 'GetParameterNames',
           status: 'PENDING',
-          payload: { parameterPath: 'Device.WiFi.', nextLevel: true },
+          payload: { parameterPath: discoveryPath, nextLevel: true },
           tenantId: device.tenantId,
         },
       });
       createdTasks.push(discTask);
       taskCount++;
-      this.logger.log(`[WIFI_READ] Queued targeted discovery Device.WiFi. for ${device.serial}`);
+      this.logger.log(`[WIFI_READ] Queued targeted discovery ${discoveryPath} for ${device.serial} (ZTE=${isZTE})`);
     }
 
     await this.prisma.log.create({
@@ -1838,6 +1880,57 @@ export class CwmpService {
           signalStrength: 0,
         });
         devIndex++;
+      }
+    }
+
+    if (connectedDevices.length === 0) {
+      const hasWiFiParams = Object.keys(params).some((k) =>
+        k.includes('WiFi.SSID') || k.includes('WLANConfiguration') || k.includes('.WIFI.'),
+      );
+      const hasAccessPoint = Object.keys(params).some((k) =>
+        k.includes('AccessPoint.'),
+      );
+      if (hasWiFiParams || hasAccessPoint) {
+        const apCount = hasTR181_AP ? 16 : 8;
+        const hostPaths: string[] = [];
+        for (let ap = 1; ap <= apCount; ap++) {
+          for (let c = 1; c <= 4; c++) {
+            hostPaths.push(
+              `Device.WiFi.AccessPoint.${ap}.AssociatedDevice.${c}.AssociatedDeviceMACAddress`,
+              `Device.WiFi.AccessPoint.${ap}.AssociatedDevice.${c}.AssociatedDeviceIPAddress`,
+              `Device.WiFi.AccessPoint.${ap}.AssociatedDevice.${c}.X_TP_HostName`,
+              `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ap}.AssociatedDevice.${c}.AssociatedDeviceMACAddress`,
+              `InternetGatewayDevice.LANDevice.1.WLANConfiguration.${ap}.AssociatedDevice.${c}.AssociatedDeviceIPAddress`,
+            );
+          }
+        }
+        const pendingCount = await this.prisma.task.count({
+          where: { deviceId: device.id, type: 'GetParameterValues', status: 'PENDING' },
+        });
+        if (pendingCount < 30) {
+          const chunkSize = 20;
+          for (let i = 0; i < hostPaths.length; i += chunkSize) {
+            const chunk = hostPaths.slice(i, i + chunkSize);
+            await this.prisma.task.create({
+              data: {
+                deviceId: device.id,
+                type: 'GetParameterValues',
+                status: 'PENDING',
+                payload: { names: chunk },
+                tenantId: device.tenantId,
+              },
+            });
+          }
+          await this.prisma.log.create({
+            data: {
+              action: 'CONNECTED_DEVICES',
+              entity: 'DEVICE',
+              entityId: device.id,
+              detail: `No cached hosts found; queued tasks to fetch from ${device.serial}`,
+              tenantId: device.tenantId,
+            },
+          });
+        }
       }
     }
 
